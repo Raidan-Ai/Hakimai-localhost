@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Shield, Users, FileText, Lock, Search, Menu, Bell, MessageSquare, BookOpen, Search as SearchIcon, Radio, Mic, ScanLine, AlertCircle } from 'lucide-react';
+import { Activity, HeartPulse, Stethoscope, Syringe, Shield, Users, FileText, Lock, Search, Menu, Bell, MessageSquare, BookOpen, Search as SearchIcon, Radio, Mic, ScanLine, AlertCircle, Settings, Globe, Box, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ChatPage from './components/ChatPage';
 import OutbreakRadar from './components/OutbreakRadar';
+import AISettings from './components/AISettings';
+import PrivacyLock from './components/PrivacyLock';
+import Footer from './components/Footer';
+import { DisclaimerPage, PrivacyPage, TermsPage } from './components/legal/LegalPages';
+import NetworkSettings from './components/NetworkSettings';
+import ModelManager from './components/ModelManager';
+import AdvancedSettings from './components/AdvancedSettings';
 import { syncOfflineData } from './lib/offlineSync';
 
 export default function App() {
@@ -83,6 +90,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F0] font-sans text-[#141414]">
+      <PrivacyLock />
       {/* Sidebar Navigation */}
       <nav className="fixed left-0 top-0 h-full w-64 bg-[#141414] text-white p-6 flex flex-col">
         <div className="flex items-center gap-3 mb-12">
@@ -100,7 +108,7 @@ export default function App() {
             onClick={() => setActiveTab('dashboard')} 
           />
           <NavItem 
-            icon={<Radio size={20} />} 
+            icon={<HeartPulse size={20} />} 
             label="Outbreak Radar" 
             active={activeTab === 'radar'} 
             onClick={() => setActiveTab('radar')} 
@@ -118,10 +126,34 @@ export default function App() {
             onClick={() => setActiveTab('pubmed')} 
           />
           <NavItem 
-            icon={<Users size={20} />} 
+            icon={<Stethoscope size={20} />} 
             label="Patient Records" 
             active={activeTab === 'patients'} 
             onClick={() => setActiveTab('patients')} 
+          />
+          <NavItem 
+            icon={<Settings size={20} />} 
+            label="AI Settings" 
+            active={activeTab === 'settings'} 
+            onClick={() => setActiveTab('settings')} 
+          />
+          <NavItem 
+            icon={<Globe size={20} />} 
+            label="Network Config" 
+            active={activeTab === 'network'} 
+            onClick={() => setActiveTab('network')} 
+          />
+          <NavItem 
+            icon={<Box size={20} />} 
+            label="Model Manager" 
+            active={activeTab === 'models'} 
+            onClick={() => setActiveTab('models')} 
+          />
+          <NavItem 
+            icon={<Zap size={20} />} 
+            label="Advanced" 
+            active={activeTab === 'advanced'} 
+            onClick={() => setActiveTab('advanced')} 
           />
         </div>
 
@@ -148,6 +180,13 @@ export default function App() {
               {activeTab === 'chat' && 'AI Orchestrator'}
               {activeTab === 'pubmed' && 'Medical Literature RAG'}
               {activeTab === 'patients' && 'Patient Records'}
+              {activeTab === 'settings' && 'AI Provider Settings'}
+              {activeTab === 'network' && 'Runtime Network Configuration'}
+              {activeTab === 'models' && 'Local AI Model Manager'}
+              {activeTab === 'advanced' && 'Advanced Configuration'}
+              {activeTab === 'legal-disclaimer' && 'Legal Disclaimer'}
+              {activeTab === 'legal-privacy' && 'Privacy Policy'}
+              {activeTab === 'legal-terms' && 'Terms of Service'}
             </h2>
             <p className="text-sm text-[#141414]/50 uppercase tracking-widest font-medium">System Status: Operational</p>
           </div>
@@ -378,7 +417,86 @@ export default function App() {
               )}
             </motion.div>
           )}
+
+          {activeTab === 'settings' && (
+            <motion.div 
+              key="settings"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <AISettings />
+            </motion.div>
+          )}
+
+          {activeTab === 'legal-disclaimer' && (
+            <motion.div 
+              key="legal-disclaimer"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <DisclaimerPage />
+            </motion.div>
+          )}
+
+          {activeTab === 'legal-privacy' && (
+            <motion.div 
+              key="legal-privacy"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <PrivacyPage />
+            </motion.div>
+          )}
+
+          {activeTab === 'legal-terms' && (
+            <motion.div 
+              key="legal-terms"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <TermsPage />
+            </motion.div>
+          )}
+
+          {activeTab === 'network' && (
+            <motion.div 
+              key="network"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <NetworkSettings />
+            </motion.div>
+          )}
+
+          {activeTab === 'models' && (
+            <motion.div 
+              key="models"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <ModelManager />
+            </motion.div>
+          )}
+
+          {activeTab === 'advanced' && (
+            <motion.div 
+              key="advanced"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <AdvancedSettings />
+            </motion.div>
+          )}
         </AnimatePresence>
+
+        <Footer onNavigate={setActiveTab} />
       </main>
     </div>
   );

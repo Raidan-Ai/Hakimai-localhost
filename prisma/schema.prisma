@@ -7,24 +7,44 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = "postgresql://localhost:5432/hakim"
 }
 
-enum Role {
-  DOCTOR
-  ADMIN
+// Note: SQLite does not support Enums. For dual-compatibility, 
+// we use String and handle roles in application logic.
+
+model SystemConfig {
+  id            String   @id @default("default")
+  baseUrl       String   @default("http://localhost:11455")
+  aiMode        String   @default("CLOUD") // CLOUD, LOCAL_EDGE, HYBRID
+  activeCloud   String   @default("GEMINI") // GEMINI, OPENAI, ANTHROPIC
+  ollamaUrl     String   @default("http://127.0.0.1:11434")
+  remoteGpuUrl  String?  // e.g., RunPod, Vast.ai endpoint
+  n8nWebhookUrl String?  // For agent automation
+  updatedAt     DateTime @updatedAt
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  name      String
+  userId    String   // Admin user who created the key
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
 }
 
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
   passwordHash String
-  role         Role       @default(DOCTOR)
+  role         String     @default("DOCTOR") // Use String for SQLite compatibility
   clinicId     String?
   cases        Case[]
   auditLogs    AuditLog[]
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
+  apiKeys      ApiKey[]
 
   @@index([clinicId])
 }
@@ -33,7 +53,7 @@ model Patient {
   id                      String   @id @default(cuid())
   name                    String
   dateOfBirth             DateTime
-  encryptedMedicalHistory String   @db.Text
+  encryptedMedicalHistory String   // Removed @db.Text for SQLite compatibility
   cases                   Case[]
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -48,7 +68,7 @@ model Case {
   doctorId     String
   doctor       User     @relation(fields: [doctorId], references: [id])
   aiModelUsed  String
-  summary      String   @db.Text
+  summary      String   // Removed @db.Text for SQLite compatibility
   status       String   @default("OPEN") // OPEN, REVIEWED, CLOSED
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -59,7 +79,7 @@ model Case {
 
 model TriageData {
   id                String   @id @default(cuid())
-  symptomsText      String   @db.Text
+  symptomsText      String   // Removed @db.Text for SQLite compatibility
   geographicLocation String?
   timestamp         DateTime @default(now())
 

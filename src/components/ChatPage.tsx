@@ -99,40 +99,37 @@ export default function ChatPage() {
     setFiles([]);
     setIsLoading(true);
 
+    const formData = new FormData();
+    formData.append('prompt', input);
+    // Convert FilePreview back to File objects for upload
+    const fileObjects = await Promise.all(files.map(async f => {
+      const res = await fetch(f.preview);
+      const blob = await res.blob();
+      return new File([blob], f.name, { type: f.type });
+    }));
+
+    if (fileObjects.length > 0) {
+      // For simplicity, we handle one file upload at a time in this example.
+      // The backend is set up for a single file with `upload.single('file')`
+      formData.append('file', fileObjects[0]);
+    }
+
     try {
-      // 1. Call the Orchestrator Router
-      const orchestratorResponse = await fetch('/api/chat', {
+      // The orchestrator response is now handled by the server after potential S3 upload
+      const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: input, files: userMessage.files })
+        body: formData,
       });
 
-      const decision = await orchestratorResponse.json();
+      const decision = await response.json();
 
-      if (decision.routeToClient) {
-        // 2a. Route to Gemini Cloud (Client-side)
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-        const model = ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: input || "Analyze the clinical context."
-        });
-        
-        const result = await model;
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: result.text || "I'm sorry, I couldn't process that request.",
-          model: '⚡ Gemini Cloud',
-          isSecure: false
-        }]);
-      } else {
-        // 2b. Route to Local Sovereign AI (Processed by Server)
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: decision.text,
-          model: '🔒 Local Sovereign AI',
-          isSecure: true
-        }]);
-      }
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: decision.text,
+        model: decision.model,
+        isSecure: decision.isSecure
+      }]);
+
     } catch (error) {
       console.error('Chat error:', error);
       setMessages(prev => [...prev, {
