@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DOCTOR
+  ADMIN
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  role         Role       @default(DOCTOR)
+  clinicId     String?
+  cases        Case[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([clinicId])
+}
+
+model Patient {
+  id                      String   @id @default(cuid())
+  name                    String
+  dateOfBirth             DateTime
+  encryptedMedicalHistory String   @db.Text
+  cases                   Case[]
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Case {
+  id           String   @id @default(cuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id])
+  doctorId     String
+  doctor       User     @relation(fields: [doctorId], references: [id])
+  aiModelUsed  String
+  summary      String   @db.Text
+  status       String   @default("OPEN") // OPEN, REVIEWED, CLOSED
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([doctorId])
+}
+
+model TriageData {
+  id                String   @id @default(cuid())
+  symptomsText      String   @db.Text
+  geographicLocation String?
+  timestamp         DateTime @default(now())
+
+  @@index([timestamp])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  resource  String
+  timestamp DateTime @default(now())
+
+  @@index([userId])
+  @@index([timestamp])
+}
