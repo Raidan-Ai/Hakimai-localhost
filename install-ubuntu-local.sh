@@ -1,153 +1,140 @@
 #!/bin/bash
-# ==============================================================================
-# Hakim AI Local Deployment Script for Ubuntu 24.04
-# Author: RaidanPro DevOps
-# Version: 1.0.0
-# ==============================================================================
+#
+# Hakim AI - Local Ubuntu 24.04 LTS Deployment Script
+# For Bare-Metal Clinic Servers & Laptops
+# RaidanPro | 2024
+#
 
-# Exit immediately if a command exits with a non-zero status.
-set -e
+set -e # Exit immediately if a command exits with a non-zero status.
+
+# --- Color Codes ---
+C_GREEN='\033[0;32m'
+C_YELLOW='\033[1;33m'
+C_RED='\033[0;31m'
+C_NC='\033[0m' # No Color
 
 # --- Helper Functions ---
-echo_green() {
-    echo -e "\033[0;32m$1\033[0m"
+print_info() {
+    echo -e "${C_YELLOW}[INFO] $1${C_NC}"
 }
 
-echo_blue() {
-    echo -e "\033[0;34m$1\033[0m"
+print_success() {
+    echo -e "${C_GREEN}[SUCCESS] $1${C_NC}"
+}
+
+print_error() {
+    echo -e "${C_RED}[ERROR] $1${C_NC}"
+    exit 1
 }
 
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# --- Installation Variables ---
-INSTALL_DIR="/opt/hakim-ai"
-NODE_VERSION="20"
+# --- Pre-flight Checks ---
+print_info "Starting Hakim AI Local Setup for Ubuntu 24.04..."
 
-echo_blue "======================================================"
-echo_blue "==  Starting Hakim AI Local Deployment on Ubuntu  =="
-echo_blue "======================================================"
-
-# --- 1. System Update ---
-echo_green "\nUpdating system packages..."
-sudo apt-get update -y && sudo apt-get upgrade -y
-
-# --- 2. Install Prerequisites (Node.js, Git, Nginx, PM2) ---
-echo_green "\nInstalling prerequisites..."
-
-# Node.js (v20+)
-if ! command_exists node || ! node -v | grep -q "v${NODE_VERSION}"; then
-    echo_blue "Installing Node.js v${NODE_VERSION}..."
-    curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash -
-    sudo apt-get install -y nodejs
-else
-    echo_green "Node.js is already installed."
+if [ "$(id -u)" -ne 0 ]; then
+    print_error "This script must be run as root. Please use sudo."
 fi
 
-# Git
-if ! command_exists git; then
-    echo_blue "Installing Git..."
-    sudo apt-get install -y git
+# --- System Dependencies ---
+print_info "Updating package lists and installing system dependencies..."
+apt-get update
+apt-get install -y apt-transport-https ca-certificates curl software-properties-common git nginx pm2
+
+# --- Node.js v20+ ---
+if ! command_exists node || ! node -v | grep -q "v20"; then
+    print_info "Node.js v20 not found. Installing..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    apt-get install -y nodejs
 else
-    echo_green "Git is already installed."
+    print_success "Node.js v20 is already installed."
 fi
 
-# Nginx
-if ! command_exists nginx; then
-    echo_blue "Installing Nginx..."
-    sudo apt-get install -y nginx
-else
-    echo_green "Nginx is already installed."
-fi
-
-# PM2 Process Manager
-if ! command_exists pm2; then
-    echo_blue "Installing PM2 globally..."
-    sudo npm install pm2 -g
-else
-    echo_green "PM2 is already installed."
-fi
-
-# --- 3. Install Docker & Docker Compose ---
-echo_green "\nInstalling Docker and Docker Compose..."
+# --- Docker & Docker Compose ---
 if ! command_exists docker; then
-    echo_blue "Installing Docker Engine..."
-    sudo apt-get install -y ca-certificates curl
-    sudo install -m 0755 -d /etc/apt/keyrings
-    sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-    sudo chmod a+r /etc/apt/keyrings/docker.asc
+    print_info "Docker not found. Installing..."
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
     echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+      "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+      "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
       sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-    sudo apt-get update -y
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    sudo usermod -aG docker $USER
-    echo_green "Docker installed. You may need to log out and log back in for group changes to take effect."
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 else
-    echo_green "Docker is already installed."
+    print_success "Docker is already installed."
 fi
 
-# --- 4. Install Ollama and Pull Medical Model ---
-echo_green "\nInstalling Ollama AI Engine..."
+# --- Ollama Local AI Engine ---
 if ! command_exists ollama; then
-    echo_blue "Installing Ollama..."
+    print_info "Ollama not found. Installing..."
     curl -fsSL https://ollama.com/install.sh | sh
 else
-    echo_green "Ollama is already installed."
+    print_success "Ollama is already installed."
 fi
 
-echo_blue "Pulling the 'llava-med' model. This may take some time..."
+print_info "Pulling the 'llava-med' model. This may take some time..."
 ollama pull llava-med
 
-# --- 5. Setup Hakim AI Application ---
-echo_green "\nSetting up the Hakim AI application directory at ${INSTALL_DIR}..."
-sudo mkdir -p ${INSTALL_DIR}/uploads
-sudo chown -R $USER:$USER ${INSTALL_DIR}
-cd ${INSTALL_DIR}
+# --- Project Setup ---
+INSTALL_DIR="/opt/hakim-ai"
+print_info "Cloning Hakim AI repository into $INSTALL_DIR..."
 
-echo_blue "Cloning the Hakim AI repository..."
-git clone https://github.com/RaidanPro/hakim-ai.git .
-
-# --- 6. Configure Environment ---
-echo_green "\nConfiguring environment..."
-if [ ! -f ".env" ]; then
-    echo_blue "Creating .env file from .env.example..."
-    cp .env.example .env
-    echo_green "IMPORTANT: Please edit the .env file with your secrets and database URL."
-    sed -i 's|DATABASE_URL=.*|DATABASE_URL="file:./medical.db"|' .env
+if [ -d "$INSTALL_DIR" ]; then
+    print_info "Existing installation found. Pulling latest changes."
+    cd "$INSTALL_DIR"
+    git pull
 else
-    echo_green ".env file already exists."
+    git clone https://github.com/RaidanPro/hakim-ai.git "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
 fi
 
-# --- 7. Install Dependencies and Build ---
-echo_green "\nInstalling Node.js dependencies..."
+# --- Environment Configuration ---
+if [ ! -f ".env" ]; then
+    print_info "No .env file found. Creating from .env.example..."
+    cp .env.example .env
+    # Set local-specific variables
+    sed -i 's,DATABASE_URL=.*,DATABASE_URL="file:./medical.db",' .env
+    sed -i 's/PORT=.*/PORT=11455/' .env
+    sed -i 's/BACKEND_PORT=.*/BACKEND_PORT=11454/' .env
+    print_info "Please edit the .env file now with your specific configurations."
+    # Pause for user to edit .env
+    read -p "Press [Enter] key to continue after editing .env..."
+fi
+
+# --- Application Dependencies & Build ---
+print_info "Installing Node.js dependencies..."
 npm install
 
-echo_blue "Setting up the database..."
+print_info "Setting up Prisma with SQLite..."
 npx prisma migrate dev --name init
+
+print_info "Seeding the database with the Super Admin account..."
 npx prisma db seed
 
-echo_blue "Building the Next.js application for production..."
+print_info "Building the Next.js application..."
 npm run build
 
-# --- 8. Configure MCP (Model Context Protocol) ---
-echo_green "\nConfiguring MCP for local file access..."
-mkdir -p mcp-server
-cat <<EOF > mcp-server/index.js
-console.log('MCP Server Started - Local file access enabled for AI.');
-// Actual server logic would go here.
-EOF
+# --- PM2 Process Management ---
+print_info "Starting the Hakim AI application with PM2..."
 
-# --- 9. Start Application with PM2 ---
-echo_green "\nStarting Hakim AI with PM2..."
-pm2 start npm --name "hakim-ai" -- start
+# The server.ts will be started by the Next.js custom server configuration
+# The main app is started via `npm start` which should be `next start -p 11455`
+
+if pm2 list | grep -q "hakim-ai-app"; then
+    print_info "hakim-ai-app is already running. Restarting..."
+    pm2 restart hakim-ai-app
+else
+    print_info "Starting hakim-ai-app..."
+    pm2 start npm --name "hakim-ai-app" -- start
+fi
+
 pm2 startup
 pm2 save
 
-echo_blue "======================================================"
-echo_green "==  Hakim AI Local Deployment Complete!           =="
-echo_blue "======================================================"
-echo "You can now access the application at http://localhost:11455"
-echo "To monitor the application, use 'pm2 list' or 'pm2 monit'."
+print_success "Hakim AI Local Deployment is complete!"
+print_info "You can access the application at http://localhost:11455"
+print_info "To monitor the application, use 'pm2 logs hakim-ai-app'."

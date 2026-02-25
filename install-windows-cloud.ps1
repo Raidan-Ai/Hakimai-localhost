@@ -1,123 +1,130 @@
-# ==============================================================================
-# Hakim AI Cloud-Connected Deployment Script for Windows
-# Author: RaidanPro DevOps
-# Version: 1.0.0
-# ==============================================================================
+#
+# Hakim AI - Cloud Windows Server Deployment Script
+# For Cloud VPS Providers (AWS, GCP, Azure, etc.)
+# RaidanPro | 2024
+#
 
 # --- Script Configuration ---
 $ErrorActionPreference = 'Stop'
-$InstallDir = "C:\Hakim-AI-Cloud"
 
 # --- Helper Functions ---
-function Write-Green {
-    param([string]$Text)
-    Write-Host $Text -ForegroundColor Green
+function Print-Info {
+    param ([string]$Message)
+    Write-Host "[INFO] $Message" -ForegroundColor Yellow
 }
 
-function Write-Blue {
-    param([string]$Text)
-    Write-Host $Text -ForegroundColor Cyan
+function Print-Success {
+    param ([string]$Message)
+    Write-Host "[SUCCESS] $Message" -ForegroundColor Green
+}
+
+function Print-Error {
+    param ([string]$Message)
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
+    exit 1
 }
 
 function Command-Exists {
-    param([string]$Command)
+    param ([string]$Command)
     return (Get-Command $Command -ErrorAction SilentlyContinue) -ne $null
 }
 
-# --- Start of Script ---
-Write-Blue "============================================================"
-Write-Blue "==  Starting Hakim AI Cloud Deployment on Windows Server  =="
-Write-Blue "============================================================"
+# --- Pre-flight Checks ---
+Print-Info "Starting Hakim AI Cloud Setup for Windows Server..."
 
-# --- 1. Install Prerequisites ---
-Write-Green "\nChecking and installing prerequisites..."
-
-# Git
-if (-not (Command-Exists git)) {
-    Write-Blue "Installing Git..."
-    winget install --id Git.Git -e --source winget
-} else {
-    Write-Green "Git is already installed."
+if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Print-Error "This script must be run as an Administrator."
 }
 
-# Node.js LTS
-if (-not (Command-Exists node)) {
-    Write-Blue "Installing Node.js (LTS)..."
-    winget install --id OpenJS.NodeJS.LTS -e --source winget
+# --- Chocolatey Package Manager ---
+if (-not (Command-Exists choco)) {
+    Print-Info "Chocolatey not found. Installing..."
+    Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 } else {
-    Write-Green "Node.js is already installed."
+    Print-Success "Chocolatey is already installed."
 }
 
-# Docker Desktop
-if (-not (Get-Command 'C:\Program Files\Docker\Docker\Docker Desktop.exe' -ErrorAction SilentlyContinue)) {
-    Write-Blue "Installing Docker Desktop..."
-    winget install --id Docker.DockerDesktop -e --source winget
-    Write-Green "Docker Desktop installation started. Please complete the setup and ensure it is running."
-} else {
-    Write-Green "Docker Desktop is already installed."
-}
+# --- Dependencies via Chocolatey ---
+$packages = @("nodejs.install --version=20", "git", "docker-desktop")
 
-# --- 2. Setup PostgreSQL with Docker ---
-Write-Green "\nSetting up PostgreSQL in a Docker container..."
-if (-not (docker ps -q -f name=hakim-postgres)) {
-    if (docker ps -aq -f status=exited -f name=hakim-postgres) {
-        Write-Blue "Removing existing stopped container..."
-        docker rm hakim-postgres
+foreach ($pkg in $packages) {
+    $pkgName = $pkg.Split(' ')[0]
+    Print-Info "Checking for $pkgName..."
+    try {
+        choco install $pkg -y --accept-licenses
+        Print-Success "$pkgName installed/updated."
+    } catch {
+        Print-Error "Failed to install $pkgName via Chocolatey."
     }
-    Write-Blue "Starting new PostgreSQL container..."
-    # IMPORTANT: Change POSTGRES_PASSWORD in a secure way
-    docker run -d `
-      --name hakim-postgres `
-      -e POSTGRES_PASSWORD=mysecretpassword `
-      -e POSTGRES_USER=hakim `
-      -e POSTGRES_DB=hakimdb `
-      -v hakim-pgdata:/var/lib/postgresql/data `
-      -p 5432:5432 `
-      --restart unless-stopped `
-      postgres:16
+}
+
+# --- Project Setup ---
+$installDir = "$env:SystemDrive\Hakim-AI"
+Print-Info "Cloning Hakim AI repository into $installDir..."
+
+if (Test-Path $installDir) {
+    Print-Info "Existing installation found. Pulling latest changes."
+    Set-Location $installDir
+    git pull
 } else {
-    Write-Green "PostgreSQL container is already running."
+    git clone https://github.com/RaidanPro/hakim-ai.git $installDir
+    Set-Location $installDir
 }
 
-# --- 3. Setup Hakim AI Application ---
-Write-Green "\nSetting up the Hakim AI application directory at $InstallDir..."
-if (-not (Test-Path $InstallDir)) {
-    New-Item -Path $InstallDir -ItemType Directory | Out-Null
-}
-Set-Location -Path $InstallDir
-
-Write-Blue "Cloning the Hakim AI repository..."
-if (-not (Test-Path ".git")) {
-    git clone https://github.com/RaidanPro/hakim-ai.git .
+# --- Dockerized PostgreSQL ---
+if (Test-Path ".\docker-compose.yml") {
+    Print-Info "docker-compose.yml found. Starting PostgreSQL container..."
+    docker-compose up -d db # Assumes your db service is named 'db'
 } else {
-    Write-Green "Repository already cloned."
+    Print-Error "docker-compose.yml not found in the repository. Cannot start PostgreSQL."
 }
 
-# --- 4. Configure Environment ---
-Write-Green "\nConfiguring environment..."
-if (-not (Test-Path ".env")) {
-    Write-Blue "Creating .env file from .env.example..."
-    Copy-Item -Path ".env.example" -Destination ".env"
-    (Get-Content .\.env) | ForEach-Object { $_ -replace 'DATABASE_URL=.*', 'DATABASE_URL="postgresql://hakim:mysecretpassword@localhost:5432/hakimdb?schema=public"' } | Set-Content .\.env
-    Write-Green "IMPORTANT: Please edit the .env file with your secrets and production domain."
-} else {
-    Write-Green ".env file already exists."
+# --- Environment Configuration ---
+if (-not (Test-Path ".\.env")) {
+    Print-Info "No .env file found. Creating from .env.example..."
+    Copy-Item .\.env.example .\.env
+    Print-Info "Please edit the .env file now with your domain, database credentials, and API keys."
+    Read-Host -Prompt "Press [Enter] key to continue after editing .env..."
 }
 
-# --- 5. Install Dependencies and Start ---
-Write-Green "\nInstalling Node.js dependencies..."
+# --- Application Dependencies & Build ---
+Print-Info "Installing Node.js dependencies..."
 npm install
 
-Write-Blue "Setting up the PostgreSQL database..."
+Print-Info "Applying Prisma migrations to the PostgreSQL database..."
 npx prisma migrate deploy
+
+Print-Info "Seeding the database with the Super Admin account..."
 npx prisma db seed
 
-Write-Blue "Building and starting the Hakim AI application for production..."
-# For a real production server, you would use PM2 or another process manager.
+Print-Info "Building the Next.js application..."
 npm run build
-npm start
 
-Write-Blue "======================================================"
-Write-Green "==   Hakim AI Cloud Deployment Complete!          =="
-Write-Blue "======================================================"
-Write-Host "The application is running. Configure your firewall and reverse proxy (like Nginx or IIS) to expose it to the internet."
+# --- PM2 Process Management ---
+Print-Info "Installing PM2 for process management..."
+npm install pm2 -g
+
+Print-Info "Starting the Hakim AI application with PM2..."
+$appName = "hakim-ai-app"
+if (pm2 list | Select-String -Pattern $appName) {
+    Print-Info "$appName is already running. Restarting..."
+    pm2 restart $appName
+} else {
+    Print-Info "Starting $appName..."
+    pm2 start npm --name $appName -- start
+}
+
+# --- Windows Firewall Configuration ---
+Print-Info "Configuring Windows Firewall..."
+$port = 11455
+$ruleName = "Hakim AI Port $port"
+if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort $port
+    Print-Success "Firewall rule '$ruleName' created for port $port."
+} else {
+    Print-Success "Firewall rule '$ruleName' already exists."
+}
+
+Print-Success "Hakim AI Cloud Deployment is complete!"
+Print-Info "Configure your DNS and any cloud provider security groups to allow traffic to port $port."
+Print-Info "You can monitor the application with 'pm2 logs $appName'."

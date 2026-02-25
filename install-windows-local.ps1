@@ -1,121 +1,121 @@
-# ==============================================================================
-# Hakim AI Local Deployment Script for Windows
-# Author: RaidanPro DevOps
-# Version: 1.0.0
-# ==============================================================================
+#
+# Hakim AI - Local Windows Deployment Script
+# For Bare-Metal Clinic Servers & Laptops
+# RaidanPro | 2024
+#
 
 # --- Script Configuration ---
 $ErrorActionPreference = 'Stop'
-$InstallDir = "C:\Hakim-AI"
 
 # --- Helper Functions ---
-function Write-Green {
-    param([string]$Text)
-    Write-Host $Text -ForegroundColor Green
+function Print-Info {
+    param ([string]$Message)
+    Write-Host "[INFO] $Message" -ForegroundColor Yellow
 }
 
-function Write-Blue {
-    param([string]$Text)
-    Write-Host $Text -ForegroundColor Cyan
+function Print-Success {
+    param ([string]$Message)
+    Write-Host "[SUCCESS] $Message" -ForegroundColor Green
+}
+
+function Print-Error {
+    param ([string]$Message)
+    Write-Host "[ERROR] $Message" -ForegroundColor Red
+    exit 1
 }
 
 function Command-Exists {
-    param([string]$Command)
+    param ([string]$Command)
     return (Get-Command $Command -ErrorAction SilentlyContinue) -ne $null
 }
 
-# --- Start of Script ---
-Write-Blue "========================================================"
-Write-Blue "==  Starting Hakim AI Local Deployment on Windows   =="
-Write-Blue "========================================================"
+# --- Pre-flight Checks ---
+Print-Info "Starting Hakim AI Local Setup for Windows..."
 
-# --- 1. Install Prerequisites with Winget ---
-Write-Green "\nChecking and installing prerequisites..."
+# Check for Administrator privileges
+if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Print-Error "This script must be run as an Administrator."
+}
 
-# Git
-if (-not (Command-Exists git)) {
-    Write-Blue "Installing Git..."
-    winget install --id Git.Git -e --source winget
+# --- Chocolatey Package Manager ---
+if (-not (Command-Exists choco)) {
+    Print-Info "Chocolatey not found. Installing..."
+    Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 } else {
-    Write-Green "Git is already installed."
+    Print-Success "Chocolatey is already installed."
 }
 
-# Node.js LTS
-if (-not (Command-Exists node)) {
-    Write-Blue "Installing Node.js (LTS)..."
-    winget install --id OpenJS.NodeJS.LTS -e --source winget
+# --- Dependencies via Chocolatey ---
+$packages = @("nodejs.install --version=20", "git", "docker-desktop")
+
+foreach ($pkg in $packages) {
+    $pkgName = $pkg.Split(' ')[0]
+    Print-Info "Checking for $pkgName..."
+    try {
+        choco install $pkg -y --accept-licenses
+        Print-Success "$pkgName installed/updated."
+    } catch {
+        Print-Error "Failed to install $pkgName via Chocolatey."
+    }
+}
+
+# --- Ollama for Windows ---
+$ollamaPath = "$env:ProgramFiles\Ollama\ollama.exe"
+if (-not (Test-Path $ollamaPath)) {
+    Print-Info "Ollama for Windows not found. Please download and install it from https://ollama.com/download/windows"
+    Start-Process "https://ollama.com/download/windows"
+    Read-Host -Prompt "Press [Enter] key to continue after installing Ollama..."
 } else {
-    Write-Green "Node.js is already installed."
+    Print-Success "Ollama for Windows is already installed."
 }
 
-# Docker Desktop
-if (-not (Get-Command 'C:\Program Files\Docker\Docker\Docker Desktop.exe' -ErrorAction SilentlyContinue)) {
-    Write-Blue "Installing Docker Desktop..."
-    winget install --id Docker.DockerDesktop -e --source winget
-    Write-Green "Docker Desktop installation started. Please complete the setup and ensure it is running."
+Print-Info "Pulling the 'llava-med' model. This may take some time..."
+& $ollamaPath pull llava-med
+
+# --- Project Setup ---
+$installDir = "$env:SystemDrive\Hakim-AI"
+Print-Info "Cloning Hakim AI repository into $installDir..."
+
+if (Test-Path $installDir) {
+    Print-Info "Existing installation found. Pulling latest changes."
+    Set-Location $installDir
+    git pull
 } else {
-    Write-Green "Docker Desktop is already installed."
+    git clone https://github.com/RaidanPro/hakim-ai.git $installDir
+    Set-Location $installDir
 }
 
-# Ollama for Windows (Preview)
-if (-not (Get-Command 'ollama' -ErrorAction SilentlyContinue)) {
-    Write-Blue "Installing Ollama for Windows..."
-    # As of now, Ollama provides an installer. This command invokes it.
-    # This might require manual interaction.
-    Invoke-WebRequest -Uri "https://ollama.com/download/windows" -OutFile "$env:TEMP\OllamaSetup.exe"
-    Start-Process -FilePath "$env:TEMP\OllamaSetup.exe" -ArgumentList '/S' -Wait
-    Write-Green "Ollama installation complete."
-} else {
-    Write-Green "Ollama is already installed."
-}
-
-# --- 2. Pull Ollama Model ---
-Write-Green "\nPulling the 'llava-med' model. This may take some time..."
-try {
-    ollama pull llava-med
-} catch {
-    Write-Host "Could not pull Ollama model. Please ensure Ollama is running." -ForegroundColor Yellow
-}
-
-# --- 3. Setup Hakim AI Application ---
-Write-Green "\nSetting up the Hakim AI application directory at $InstallDir..."
-if (-not (Test-Path $InstallDir)) {
-    New-Item -Path $InstallDir -ItemType Directory | Out-Null
-}
-Set-Location -Path $InstallDir
-
-Write-Blue "Cloning the Hakim AI repository..."
-if (-not (Test-Path ".git")) {
-    git clone https://github.com/RaidanPro/hakim-ai.git .
-} else {
-    Write-Green "Repository already cloned."
-}
-
-# --- 4. Configure Environment ---
-Write-Green "\nConfiguring environment..."
-if (-not (Test-Path ".env")) {
-    Write-Blue "Creating .env file from .env.example..."
-    Copy-Item -Path ".env.example" -Destination ".env"
+# --- Environment Configuration ---
+if (-not (Test-Path ".\.env")) {
+    Print-Info "No .env file found. Creating from .env.example..."
+    Copy-Item .\.env.example .\.env
+    # Set local-specific variables
     (Get-Content .\.env) | ForEach-Object { $_ -replace 'DATABASE_URL=.*', 'DATABASE_URL="file:./medical.db"' } | Set-Content .\.env
-    Write-Green "IMPORTANT: Please edit the .env file with your secrets."
-} else {
-    Write-Green ".env file already exists."
+    (Get-Content .\.env) | ForEach-Object { $_ -replace 'PORT=.*', 'PORT=11455' } | Set-Content .\.env
+    (Get-Content .\.env) | ForEach-Object { $_ -replace 'BACKEND_PORT=.*', 'BACKEND_PORT=11454' } | Set-Content .\.env
+    Print-Info "Please edit the .env file now with your specific configurations."
+    Read-Host -Prompt "Press [Enter] key to continue after editing .env..."
 }
 
-# --- 5. Install Dependencies and Start ---
-Write-Green "\nInstalling Node.js dependencies..."
+# --- Application Dependencies & Build ---
+Print-Info "Installing Node.js dependencies..."
 npm install
 
-Write-Blue "Setting up the SQLite database..."
+Print-Info "Setting up Prisma with SQLite..."
 npx prisma migrate dev --name init
+
+Print-Info "Seeding the database with the Super Admin account..."
 npx prisma db seed
 
-Write-Blue "Starting the Hakim AI application..."
-# This will start the app in the current PowerShell window.
-# For production, consider using a process manager like PM2.
-npm run dev
+Print-Info "Building the Next.js application..."
+npm run build
 
-Write-Blue "======================================================"
-Write-Green "==  Hakim AI Local Deployment Complete!           =="
-Write-Blue "======================================================"
-Write-Host "You can now access the application at http://localhost:11455"
+# --- Start Application ---
+Print-Info "Starting the Hakim AI application..."
+# This will open a new terminal window for the app.
+# For a production setup, consider using a process manager like PM2.
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "npm start"
+
+Print-Success "Hakim AI Local Deployment is complete!"
+Print-Info "The application is running in a new PowerShell window."
+Print-Info "You can access it at http://localhost:11455"

@@ -1,18 +1,16 @@
 import { PrismaClient } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Starting database seeding...');
+  console.log('Starting the seeding process...');
 
   const adminEmail = process.env.DEFAULT_ADMIN_EMAIL;
   const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
 
   if (!adminEmail || !adminPassword) {
-    throw new Error(
-      '❌ Missing DEFAULT_ADMIN_EMAIL or DEFAULT_ADMIN_PASSWORD in your .env file. Please set them before seeding.'
-    );
+    throw new Error('DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD must be set in your .env file');
   }
 
   // Check if the admin user already exists
@@ -21,29 +19,37 @@ async function main() {
   });
 
   if (existingAdmin) {
-    console.log('✅ Admin user already exists. Skipping creation.');
+    console.log('Super Admin user already exists. Skipping creation.');
   } else {
-    console.log(`🔑 Creating Super Admin account for: ${adminEmail}`);
+    console.log('Creating Super Admin user...');
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
-    // Hash the password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(adminPassword, saltRounds);
-
-    // Create the user
     await prisma.user.create({
       data: {
         email: adminEmail,
         password: hashedPassword,
         name: 'Super Admin',
-        // Add other required fields for your User model, e.g., role
-        // role: 'ADMIN',
+        role: 'ADMIN',
+        emailVerified: new Date(),
       },
     });
-
-    console.log('✅ Super Admin account created successfully.');
+    console.log('Super Admin user created successfully.');
   }
 
-  console.log('🌱 Database seeding finished.');
+  // You can add other seed data here, e.g., initial SystemConfig
+  const existingConfig = await prisma.systemConfig.findFirst();
+  if (!existingConfig) {
+    console.log('Creating initial system configuration...');
+    await prisma.systemConfig.create({
+      data: {
+        // Initial default settings can be placed here
+        publicTrialEnabled: false,
+        trialMessageLimit: 10,
+      }
+    });
+    console.log('Initial system configuration created.');
+  }
+
 }
 
 main()

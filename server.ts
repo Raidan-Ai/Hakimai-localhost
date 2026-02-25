@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 
 import { randomBytes } from 'crypto';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -389,6 +390,43 @@ async function startServer() {
   });
 
   app.use('/api/v1', apiV1);
+
+  /**
+   * 12. User Management (Admin Only)
+   */
+  const adminApi = express.Router();
+  
+  // Middleware to check for ADMIN role
+  adminApi.use(async (req, res, next) => {
+    // In a real app, you'd get the user from a session and check their role
+    const is_admin = true; // Placeholder for session check
+    if (is_admin) {
+      next();
+    } else {
+      res.status(403).json({ error: 'Forbidden: Access denied' });
+    }
+  });
+
+  adminApi.get('/users', async (req, res) => {
+    const users = await prisma.user.findMany();
+    res.json(users.map(u => ({ ...u, password: '' }))); // Exclude password hash
+  });
+
+  adminApi.post('/users', async (req, res) => {
+    const { email, name, password, role } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = await prisma.user.create({
+      data: { email, name, password: hashedPassword, role },
+    });
+    res.status(201).json(newUser);
+  });
+
+  app.use('/api/admin', adminApi);
+
+  /**
+   * 13. Google Drive OAuth Flow (for Doctors)
+   */
+  // ... (OAuth routes will be added here in a subsequent step)
 
   // Vite Integration
   if (process.env.NODE_ENV !== 'production') {

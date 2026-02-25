@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Send, Paperclip, X, Shield, Zap, FileText, ImageIcon, Loader2, Trash2 } from 'lucide-react';
+import { Send, Paperclip, X, Shield, Zap, FileText, ImageIcon, Loader2, Trash2, Mic, Play } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GoogleGenAI } from "@google/genai";
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import RegistrationForm from './RegistrationForm';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -18,6 +19,7 @@ interface Message {
   model?: string;
   isSecure?: boolean;
   files?: FilePreview[];
+  audioBase64?: string;
 }
 
 interface FilePreview {
@@ -32,6 +34,9 @@ export default function ChatPage() {
   const [input, setInput] = useState('');
   const [files, setFiles] = useState<FilePreview[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [trialEnded, setTrialEnded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load messages from localStorage on mount
@@ -123,12 +128,16 @@ export default function ChatPage() {
 
       const decision = await response.json();
 
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: decision.text,
-        model: decision.model,
-        isSecure: decision.isSecure
-      }]);
+      if (decision.type === 'TRIAL_ENDED') {
+        setTrialEnded(true);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: decision.text,
+          model: decision.model,
+          isSecure: decision.isSecure
+        }]);
+      }
 
     } catch (error) {
       console.error('Chat error:', error);
@@ -169,66 +178,81 @@ export default function ChatPage() {
 
       {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6">
-        {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
-            <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
-              <Activity className="text-emerald-600 w-8 h-8" />
-            </div>
-            <h4 className="text-xl font-serif italic mb-2">How can I assist your clinical workflow?</h4>
-            <p className="text-sm text-[#141414]/50">
-              Upload radiology images or patient records. Our orchestrator will automatically route sensitive data to local sovereign AI.
-            </p>
-          </div>
-        )}
-
-        <AnimatePresence initial={false}>
-          {messages.map((msg, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={cn(
-                "flex flex-col max-w-[80%]",
-                msg.role === 'user' ? "ml-auto items-end" : "mr-auto items-start"
-              )}
-            >
-              {msg.model && (
-                <div className={cn(
-                  "flex items-center gap-1.5 mb-2 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider",
-                  msg.isSecure ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600"
-                )}>
-                  {msg.model}
+        {trialEnded ? (
+          <RegistrationForm />
+        ) : (
+          <>
+            {messages.length === 0 && (
+              <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto">
+                <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mb-6">
+                  <Activity className="text-emerald-600 w-8 h-8" />
                 </div>
-              )}
-              
-              <div className={cn(
-                "p-4 rounded-2xl text-sm leading-relaxed",
-                msg.role === 'user' 
-                  ? "bg-[#141414] text-white rounded-tr-none" 
-                  : "bg-gray-100 text-[#141414] rounded-tl-none"
-              )}>
-                {msg.content}
-                
-                {msg.files && msg.files.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {msg.files.map((file, fi) => (
-                      <div key={fi} className="flex items-center gap-2 p-2 bg-white/10 rounded-lg border border-white/10">
-                        {file.type.includes('image') ? <ImageIcon size={14} /> : <FileText size={14} />}
-                        <span className="text-[10px] truncate max-w-[100px]">{file.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <h4 className="text-xl font-serif italic mb-2">How can I assist your clinical workflow?</h4>
+                <p className="text-sm text-[#141414]/50">
+                  Upload radiology images or patient records. Our orchestrator will automatically route sensitive data to local sovereign AI.
+                </p>
               </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-        
-        {isLoading && (
-          <div className="flex items-center gap-3 text-[#141414]/40 italic text-xs">
-            <Loader2 className="animate-spin" size={14} />
-            Orchestrating clinical reasoning...
-          </div>
+            )}
+
+            <AnimatePresence initial={false}>
+              {messages.map((msg, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn(
+                    "flex flex-col max-w-[80%]",
+                    msg.role === 'user' ? "ml-auto items-end" : "mr-auto items-start"
+                  )}
+                >
+                  {msg.model && (
+                    <div className={cn(
+                      "flex items-center gap-1.5 mb-2 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider",
+                      msg.isSecure ? "bg-indigo-50 text-indigo-600" : "bg-amber-50 text-amber-600"
+                    )}>
+                      {msg.model}
+                    </div>
+                  )}
+                  
+                  <div className={cn(
+                    "p-4 rounded-2xl text-sm leading-relaxed",
+                    msg.role === 'user' 
+                      ? "bg-[#141414] text-white rounded-tr-none" 
+                      : "bg-gray-100 text-[#141414] rounded-tl-none"
+                  )}>
+                    {msg.content}
+                    
+                    {msg.audioBase64 && (
+                        <div className="mt-3">
+                            <button onClick={() => alert('play audio')} className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 text-emerald-700 rounded-lg text-xs font-bold">
+                                <Play size={14} />
+                                Play Response
+                            </button>
+                        </div>
+                    )}
+
+                    {msg.files && msg.files.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {msg.files.map((file, fi) => (
+                          <div key={fi} className="flex items-center gap-2 p-2 bg-white/10 rounded-lg border border-white/10">
+                            {file.type.includes('image') ? <ImageIcon size={14} /> : <FileText size={14} />}
+                            <span className="text-[10px] truncate max-w-[100px]">{file.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            
+            {isLoading && (
+              <div className="flex items-center gap-3 text-[#141414]/40 italic text-xs">
+                <Loader2 className="animate-spin" size={14} />
+                Orchestrating clinical reasoning...
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -279,16 +303,27 @@ export default function ChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Describe symptoms or ask about clinical findings..."
-            className="w-full pl-14 pr-14 py-4 bg-white border border-[#141414]/10 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm"
+            className="w-full pl-14 pr-28 py-4 bg-white border border-[#141414]/10 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 shadow-sm"
           />
           
-          <button 
-            type="submit"
-            disabled={isLoading || (!input.trim() && files.length === 0)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send size={18} />
-          </button>
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            <button
+                onClick={() => alert('Start recording...')}
+                className={cn(
+                    "p-2 rounded-full transition-colors",
+                    isRecording ? "bg-red-500/20 text-red-600 animate-pulse" : "hover:bg-gray-200 text-[#141414]/40"
+                )}
+            >
+                <Mic size={18} />
+            </button>
+            <button 
+              type="submit"
+              disabled={isLoading || (!input.trim() && files.length === 0)}
+              className="p-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send size={18} />
+            </button>
+          </div>
         </form>
         
         <p className="mt-3 text-[10px] text-center text-[#141414]/30 uppercase tracking-widest font-bold">

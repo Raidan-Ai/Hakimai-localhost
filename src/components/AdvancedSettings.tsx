@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Cpu, Zap, Save, Loader2, CheckCircle2, AlertCircle, Terminal, Key } from 'lucide-react';
+import { Cpu, Zap, Save, Loader2, CheckCircle2, AlertCircle, Terminal, Key, Users } from 'lucide-react';
 import { motion } from 'motion/react';
+import VoiceSettings from './VoiceSettings';
 
 export default function AdvancedSettings() {
   const [config, setConfig] = useState({
     remoteGpuUrl: '',
     n8nWebhookUrl: '',
+    publicTrialEnabled: false,
+    trialMessageLimit: 10,
   });
   const [apiKeys, setApiKeys] = useState([]);
   const [newKeyName, setNewKeyName] = useState('');
@@ -104,6 +107,45 @@ export default function AdvancedSettings() {
             </div>
         </div>
       </div>
+
+      {/* Public Trial Settings */}
+      <div className="bg-white rounded-3xl p-8 border border-[#141414]/5 shadow-sm">
+        <div className="flex items-center gap-3 mb-8">
+            <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center">
+                <Users className="text-emerald-600 w-6 h-6" />
+            </div>
+            <div>
+                <h3 className="text-xl font-bold">Public Free Trial</h3>
+                <p className="text-sm text-[#141414]/40">Allow public users to try Hakim AI with a message limit.</p>
+            </div>
+        </div>
+        <div className="space-y-6">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                <div>
+                    <label className="font-bold">Enable Public Trial</label>
+                    <p className="text-xs text-[#141414]/40">When enabled, non-logged-in users can access the AI Orchestrator.</p>
+                </div>
+                <button 
+                    onClick={() => setConfig({ ...config, publicTrialEnabled: !config.publicTrialEnabled })}
+                    className={`w-12 h-6 rounded-full flex items-center transition-colors ${config.publicTrialEnabled ? 'bg-emerald-500 justify-end' : 'bg-gray-200 justify-start'}`}>
+                    <span className="w-5 h-5 bg-white rounded-full shadow block transform" />
+                </button>
+            </div>
+            <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-[#141414]/40 mb-2">
+                Trial Message Limit
+                </label>
+                <input
+                    type="number"
+                    value={config.trialMessageLimit || 10}
+                    onChange={(e) => setConfig({ ...config, trialMessageLimit: parseInt(e.target.value) })}
+                    className="w-full px-6 py-3 bg-gray-50 border border-[#141414]/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+            </div>
+        </div>
+      </div>
+
+      <VoiceSettings />
 
       {/* API Key Management */}
        <div className="bg-white rounded-3xl p-8 border border-[#141414]/5 shadow-sm">

@@ -1,142 +1,117 @@
-# Hakim AI - Clinical Decision Support System
+# Hakim AI - Enterprise Deployment
 
-**Developed by RaidanPro | Enterprise System Architecture**
-
----
+**Developed by RaidanPro**
 
 ## 1. Project Overview
 
-Hakim AI is an advanced, multimodal Clinical Decision Support System (CDSS) designed for modern healthcare environments. It leverages a sophisticated **Mixture of Experts (MoE)** model to provide clinicians with state-of-the-art tools for diagnosis, research, and administration, while ensuring strict HIPAA compliance through a hybrid AI architecture.
+Hakim AI is an advanced, multimodal AI orchestrator designed for clinical environments. It provides healthcare professionals with a secure, HIPAA-compliant platform for interacting with patient data, medical records, and diagnostic images. The system is built on a hybrid AI architecture, leveraging both local, sovereign AI models (via Ollama) for sensitive data processing and powerful cloud-based models for general-purpose tasks.
 
-The system is built to be deployed in various environments, from standalone laptops in remote clinics to scalable cloud servers, providing a consistent and powerful experience across the board.
+This repository contains the complete deployment kit for setting up Hakim AI in various enterprise environments, from local bare-metal servers to cloud VPS instances.
 
 ## 2. System Architecture
 
-Hakim AI is built on a modern, robust technology stack chosen for performance, scalability, and security.
+The Hakim AI platform is built on a modern, robust, and scalable technology stack:
 
--   **Frontend & Backend:** [Next.js 14 (App Router)](https://nextjs.org/) - A full-stack React framework providing a seamless developer experience and high-performance server-side rendering.
--   **Database ORM:** [Prisma](https://www.prisma.io/) - A next-generation ORM for Node.js and TypeScript that simplifies database access and ensures type safety.
--   **Local AI Engine:** [Ollama](https://ollama.com/) - Powers the local, sovereign AI capabilities, allowing for on-premise processing of sensitive Patient Health Information (PHI).
--   **Containerization:** [Docker](https://www.docker.com/) - Used for creating reproducible environments, especially for deploying the PostgreSQL database in cloud setups.
--   **Model Context Protocol (MCP):** A custom-developed protocol that allows the AI models to securely access and reason about local files (e.g., PDF reports, DICOM images) without exposing the file system directly.
+- **Frontend**: Next.js (App Router) with React and Tailwind CSS.
+- **Backend**: A custom Express.js server integrated with Next.js, providing a robust API layer.
+- **Database**: Prisma ORM, supporting both PostgreSQL (for production) and SQLite (for local development).
+- **Authentication**: NextAuth.js, providing credential-based login as well as OAuth integration with Google and LinkedIn.
+- **Local AI**: Ollama, for running local large language models like `llava-med` in a secure, offline environment.
+- **AI Orchestration**: A custom-built orchestrator that intelligently routes queries to the appropriate AI model based on data sensitivity and task requirements.
+- **Model Context Protocol (MCP)**: A specialized protocol for providing local file system context to the AI models, enabling them to read and analyze local documents and images.
+- **Containerization**: Docker and Docker Compose for easy deployment and management of the database and other services.
+- **Process Management**: PM2 for ensuring the application runs continuously in a production environment.
 
-## 3. Prerequisites
+### Architectural Enhancements (System Audit)
 
-### Hardware Recommendations
+To ensure enterprise-grade reliability and security, the following components have been added:
 
--   **Local/Bare-Metal (with On-Premise AI):**
-    -   **CPU:** Modern Intel i7/i9 or AMD Ryzen 7/9 (8+ cores recommended).
-    -   **RAM:** 32 GB RAM minimum (64 GB recommended for larger models).
-    -   **GPU:** NVIDIA GeForce RTX 3060 (12 GB VRAM) or better. An enterprise-grade NVIDIA A-series GPU is highly recommended for clinical settings.
-    -   **Storage:** 1 TB NVMe SSD for fast model and data access.
--   **Cloud VPS (for Backend/DB Hosting):**
-    -   2 vCPU, 4 GB RAM, 50 GB SSD (for the application and database server).
+- **API Rate Limiting**: `express-rate-limit` is used to protect API endpoints from brute-force attacks and abuse.
+- **Structured Logging**: `winston` provides a robust, level-based logging system for production monitoring and debugging.
+- **Security Headers**: `helmet` is used to apply essential security headers to HTTP responses, protecting against common vulnerabilities like XSS and clickjacking.
 
-### Software
+## 3. Deployment Guides
 
--   **Operating System:**
-    -   Ubuntu 24.04 LTS (Recommended for servers)
-    -   Windows 10/11 with WSL2 or Windows Server 2022
--   An active internet connection for the initial setup and to pull dependencies.
+Follow the appropriate guide for your target environment.
 
-## 4. Deployment Guides
+### 3.1. Ubuntu 24.04 LTS
 
-Choose the guide that matches your target environment. The scripts are idempotent, meaning they can be run multiple times without causing issues.
+#### Local / Bare-Metal Server
 
-### 4.1. Ubuntu 24.04 LTS
-
-#### **Local Clinic / Bare-Metal Installation**
-
-This setup installs everything needed to run Hakim AI, including the local Ollama AI engine, on a single machine.
-
-1.  **Download the Script:**
+1.  **Download the script**:
     ```bash
-    wget https://raw.githubusercontent.com/RaidanPro/hakim-ai/main/scripts/install-ubuntu-local.sh
+    wget https://raw.githubusercontent.com/RaidanPro/hakim-ai/main/install-ubuntu-local.sh
     ```
-
-2.  **Make it Executable:**
+2.  **Make it executable**:
     ```bash
     chmod +x install-ubuntu-local.sh
     ```
-
-3.  **Run the Installer:**
+3.  **Run as root**:
     ```bash
-    ./install-ubuntu-local.sh
+    sudo ./install-ubuntu-local.sh
     ```
+4.  **Follow the prompts**: The script will pause to allow you to edit the `.env` file. Fill in your specific configuration details.
 
-4.  **Configure:** After the script finishes, you **must** edit the environment file with your secret keys.
+#### Cloud VPS (AWS, GCP, Azure)
+
+1.  **Download the script**:
     ```bash
-    nano /opt/hakim-ai/.env
+    wget https://raw.githubusercontent.com/RaidanPro/hakim-ai/main/install-ubuntu-cloud.sh
     ```
-    Fill in your `GEMINI_API_KEY`, `NEXTAUTH_SECRET`, and any other required variables.
-
-5.  **Restart the Application:** For the new `.env` variables to take effect, restart the app using PM2.
+2.  **Make it executable**:
     ```bash
-    pm2 restart hakim-ai
-    ```
-
-#### **Cloud VPS Installation**
-
-This setup configures Hakim AI with a robust PostgreSQL database running in Docker, ready for production traffic.
-
-1.  **Download and Run:**
-    ```bash
-    wget https://raw.githubusercontent.com/RaidanPro/hakim-ai/main/scripts/install-ubuntu-cloud.sh
     chmod +x install-ubuntu-cloud.sh
-    ./install-ubuntu-cloud.sh
     ```
-
-2.  **Configure DNS:** Point your domain (e.g., `hakim.your-clinic.com`) to the IP address of your VPS.
-
-3.  **Configure Environment:** Edit the `.env` file, making sure to set the correct `DATABASE_URL` (the script sets a default, but you should use a strong, unique password) and your production `NEXTAUTH_URL`.
+3.  **Run as root**:
     ```bash
-    nano /opt/hakim-ai/.env
+    sudo ./install-ubuntu-cloud.sh
     ```
+4.  **Follow the prompts**: The script will ask for your domain name and will pause for you to edit the `.env` file.
 
-4.  **Secure with SSL (Recommended):** Use Certbot to get a free SSL certificate for your domain.
-    ```bash
-    sudo apt install certbot python3-certbot-nginx -y
-    sudo certbot --nginx -d hakim.your-clinic.com
-    ```
+### 3.2. Windows
 
-5.  **Restart:**
-    ```bash
-    pm2 restart hakim-ai
-    ```
+#### Local / Bare-Metal Server
 
-### 4.2. Windows
-
-#### **Local Clinic Installation**
-
-1.  **Open PowerShell as Administrator.**
-2.  **Download and Run the Script:**
+1.  **Download the script**: `install-windows-local.ps1`
+2.  **Open PowerShell as Administrator**.
+3.  **Run the script**:
     ```powershell
-    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/RaidanPro/hakim-ai/main/scripts/install-windows-local.ps1" -OutFile ".\install-windows-local.ps1"
-    Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope Process
     .\install-windows-local.ps1
     ```
-3.  **Follow Prompts:** The script will use `winget` to install dependencies. You may need to approve prompts from the installers.
-4.  **Configure:** After the script clones the repository, it will pause before starting the app. Edit the `.env` file in `C:\Hakim-AI` with your secrets.
-5.  The script will then start the application in the console.
+4.  **Follow the prompts**: The script will guide you through the installation and `.env` configuration.
 
-#### **Cloud-Connected Installation**
+#### Cloud Server
 
-This is for running the Node.js server on Windows while connecting to a cloud PostgreSQL database.
-
-1.  **Open PowerShell as Administrator.**
-2.  **Download and Run:**
+1.  **Download the script**: `install-windows-cloud.ps1`
+2.  **Open PowerShell as Administrator**.
+3.  **Run the script**:
     ```powershell
-    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/RaidanPro/hakim-ai/main/scripts/install-windows-cloud.ps1" -OutFile ".\install-windows-cloud.ps1"
-    Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope Process
     .\install-windows-cloud.ps1
     ```
-3.  **Configure:** Edit the `.env` file in `C:\Hakim-AI-Cloud` and set the `DATABASE_URL` to point to your managed PostgreSQL instance.
+4.  **Follow the prompts**.
 
-## 5. Post-Installation: Custom Domains
+## 4. Post-Installation Configuration
 
-Hakim AI's admin dashboard allows you to change system URLs and configurations at runtime.
+### 4.1. Custom Domain & HTTPS (Cloud)
 
-1.  Log in to the Hakim AI application with your Super Admin account.
-2.  Navigate to **Admin -> Network Config**.
-3.  Update the `Base URL` to your custom domain (e.g., `https://hakim.your-clinic.com`).
-4.  Save the changes. This will ensure that all generated links and API callbacks use the correct domain.
+After running the cloud installation script, you must:
+
+1.  **Point your domain's DNS A record** to the IP address of your cloud server.
+2.  **Install Certbot** and obtain an SSL certificate for your domain:
+    ```bash
+    sudo apt-get install certbot python3-certbot-nginx
+    sudo certbot --nginx -d your-domain.com
+    ```
+
+### 4.2. OAuth Configuration (Google & LinkedIn)
+
+1.  **Log in to the Hakim AI admin panel**.
+2.  Navigate to **Settings > Authentication**.
+3.  **Enable the desired OAuth providers** and enter the Client ID and Client Secret obtained from the Google Cloud Console and LinkedIn Developer Portal.
+4.  **In your provider's dashboard**, ensure you have added the correct callback URL:
+    `https://your-domain.com/api/auth/callback/google`
+    `https://your-domain.com/api/auth/callback/linkedin`
+
+### 4.3. MCP File Access
+
+The Model Context Protocol allows the local AI to access files on the server. Ensure that the `LOCAL_UPLOAD_DIR` in your `.env` file points to a valid directory on the server and that the user running the Hakim AI application has read/write permissions to it.

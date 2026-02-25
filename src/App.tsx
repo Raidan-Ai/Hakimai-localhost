@@ -10,6 +10,7 @@ import { DisclaimerPage, PrivacyPage, TermsPage } from './components/legal/Legal
 import NetworkSettings from './components/NetworkSettings';
 import ModelManager from './components/ModelManager';
 import AdvancedSettings from './components/AdvancedSettings';
+import UserManagement from './components/UserManagement';
 import { syncOfflineData } from './lib/offlineSync';
 
 export default function App() {
@@ -17,6 +18,10 @@ export default function App() {
   const [pubmedQuery, setPubmedQuery] = useState('');
   const [pubmedResult, setPubmedResult] = useState<any>(null);
   const [isSearchingPubmed, setIsSearchingPubmed] = useState(false);
+
+  // --- Mock User ---
+  // In a real app, this would come from an auth context like NextAuth.js
+  const [currentUser, setCurrentUser] = useState({ role: 'ADMIN' });
   
   // Scribe State
   const [isRecording, setIsRecording] = useState(false);
@@ -131,30 +136,40 @@ export default function App() {
             active={activeTab === 'patients'} 
             onClick={() => setActiveTab('patients')} 
           />
-          <NavItem 
-            icon={<Settings size={20} />} 
-            label="AI Settings" 
-            active={activeTab === 'settings'} 
-            onClick={() => setActiveTab('settings')} 
-          />
-          <NavItem 
-            icon={<Globe size={20} />} 
-            label="Network Config" 
-            active={activeTab === 'network'} 
-            onClick={() => setActiveTab('network')} 
-          />
-          <NavItem 
-            icon={<Box size={20} />} 
-            label="Model Manager" 
-            active={activeTab === 'models'} 
-            onClick={() => setActiveTab('models')} 
-          />
-          <NavItem 
-            icon={<Zap size={20} />} 
-            label="Advanced" 
-            active={activeTab === 'advanced'} 
-            onClick={() => setActiveTab('advanced')} 
-          />
+          {currentUser.role === 'ADMIN' && (
+            <>
+              <NavItem 
+                icon={<Settings size={20} />} 
+                label="AI Settings" 
+                active={activeTab === 'settings'} 
+                onClick={() => setActiveTab('settings')} 
+              />
+              <NavItem 
+                icon={<Globe size={20} />} 
+                label="Network Config" 
+                active={activeTab === 'network'} 
+                onClick={() => setActiveTab('network')} 
+              />
+              <NavItem 
+                icon={<Box size={20} />} 
+                label="Model Manager" 
+                active={activeTab === 'models'} 
+                onClick={() => setActiveTab('models')} 
+              />
+              <NavItem 
+                icon={<Zap size={20} />} 
+                label="Advanced" 
+                active={activeTab === 'advanced'} 
+                onClick={() => setActiveTab('advanced')} 
+              />
+              <NavItem 
+                icon={<Users size={20} />} 
+                label="Users" 
+                active={activeTab === 'users'} 
+                onClick={() => setActiveTab('users')} 
+              />
+            </>
+          )}
         </div>
 
         <div className="pt-6 border-t border-white/10">
@@ -184,6 +199,7 @@ export default function App() {
               {activeTab === 'network' && 'Runtime Network Configuration'}
               {activeTab === 'models' && 'Local AI Model Manager'}
               {activeTab === 'advanced' && 'Advanced Configuration'}
+              {activeTab === 'users' && 'User Management'}
               {activeTab === 'legal-disclaimer' && 'Legal Disclaimer'}
               {activeTab === 'legal-privacy' && 'Privacy Policy'}
               {activeTab === 'legal-terms' && 'Terms of Service'}
@@ -492,6 +508,17 @@ export default function App() {
               exit={{ opacity: 0, y: -20 }}
             >
               <AdvancedSettings />
+            </motion.div>
+          )}
+
+          {activeTab === 'users' && (
+            <motion.div
+              key="users"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <UserManagement />
             </motion.div>
           )}
         </AnimatePresence>
