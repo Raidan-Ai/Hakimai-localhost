@@ -683,6 +683,59 @@ async function startServer() {
     }
   });
 
+  /**
+   * 15. System Notifications
+   */
+  app.get('/api/notifications', authenticate, async (req: any, res) => {
+    const userId = req.user.id;
+    const notifications = await prisma.systemNotification.findMany({
+      where: {
+        OR: [
+          { userId: userId },
+          { userId: null },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(notifications);
+  });
+
+  app.post('/api/notifications', authenticate, authorize([Role.ADMIN]), async (req: any, res) => {
+    const { title, message, type, userId } = req.body;
+    const notification = await prisma.systemNotification.create({
+      data: {
+        title,
+        message,
+        type: type as any,
+        userId: userId || null,
+      },
+    });
+    res.status(201).json(notification);
+  });
+
+  app.delete('/api/notifications/:id', authenticate, authorize([Role.ADMIN]), async (req, res) => {
+    const { id } = req.params;
+    await prisma.systemNotification.delete({ where: { id } });
+    res.status(204).end();
+  });
+
+  app.post('/api/notifications/:id/read', authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    
+    // Ensure the notification belongs to the user or is system-wide
+    const notification = await prisma.systemNotification.findUnique({ where: { id } });
+    if (!notification || (notification.userId && notification.userId !== userId)) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    const updated = await prisma.systemNotification.update({
+      where: { id },
+      data: { readAt: new Date() },
+    });
+    res.json(updated);
+  });
+
   // Vite Integration
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

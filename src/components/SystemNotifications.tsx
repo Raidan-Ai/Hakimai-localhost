@@ -50,6 +50,15 @@ export default function SystemNotifications() {
     }
   };
 
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+      fetchNotifications();
+    } catch (error) {
+      console.error('Mark as read failed:', error);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this notification?')) return;
     try {
@@ -142,29 +151,35 @@ export default function SystemNotifications() {
                   layout
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
-                  className={`p-6 rounded-[32px] border flex gap-4 group ${
+                  className={`p-6 rounded-[32px] border flex gap-4 group transition-all ${
+                    notif.readAt ? 'opacity-60 grayscale-[0.5]' : 'opacity-100'
+                  } ${
                     notif.type === 'CRITICAL' ? 'bg-red-50 border-red-100' :
                     notif.type === 'WARNING' ? 'bg-amber-50 border-amber-100' :
                     'bg-white border-[#141414]/5'
                   }`}
                 >
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${
+                  <div 
+                    onClick={() => !notif.readAt && handleMarkAsRead(notif.id)}
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm cursor-pointer ${
                     notif.type === 'CRITICAL' ? 'bg-white text-red-500' :
                     notif.type === 'WARNING' ? 'bg-white text-amber-500' :
                     'bg-gray-50 text-emerald-500'
                   }`}>
-                    {notif.type === 'CRITICAL' ? <AlertCircle size={24} /> :
-                     notif.type === 'WARNING' ? <AlertCircle size={24} /> :
-                     <Info size={24} />}
+                    {notif.readAt ? <CheckCircle2 size={24} className="text-emerald-500" /> : (
+                      notif.type === 'CRITICAL' ? <AlertCircle size={24} /> :
+                      notif.type === 'WARNING' ? <AlertCircle size={24} /> :
+                      <Info size={24} />
+                    )}
                   </div>
-                  <div className="flex-1 space-y-1">
+                  <div className="flex-1 space-y-1" onClick={() => !notif.readAt && handleMarkAsRead(notif.id)}>
                     <div className="flex justify-between items-start">
-                      <h4 className="font-bold text-sm">{notif.title}</h4>
+                      <h4 className={`font-bold text-sm ${notif.readAt ? 'line-through text-gray-400' : ''}`}>{notif.title}</h4>
                       <span className="text-[10px] text-gray-400 font-medium">
                         {new Date(notif.createdAt).toLocaleDateString()}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-600 leading-relaxed">{notif.message}</p>
+                    <p className={`text-xs leading-relaxed ${notif.readAt ? 'text-gray-400' : 'text-gray-600'}`}>{notif.message}</p>
                   </div>
                   {user?.role === 'ADMIN' && (
                     <button 

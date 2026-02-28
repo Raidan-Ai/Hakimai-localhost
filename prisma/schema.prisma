@@ -79,6 +79,12 @@ enum Role {
   DOCTOR
 }
 
+enum NotificationType {
+  INFO
+  WARNING
+  CRITICAL
+}
+
 model ApiKey {
   id        String   @id @default(cuid())
   key       String   @unique
@@ -115,6 +121,7 @@ model User {
   apiKeys       ApiKey[]
   googleDriveTokens UserGoogleDriveToken[]
   doctorProfile   DoctorProfile? // Relation to the new DoctorProfile model
+  notifications   SystemNotification[]
 
   @@index([clinicId])
 }
@@ -144,12 +151,14 @@ model KnowledgeBase {
 
 // New model for admin-to-doctor notifications
 model SystemNotification {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   title     String
-  message   String   @db.Text
-  isRead    Boolean  @default(false)
-  userId    String   // Can be targeted to a specific user or be system-wide
-  createdAt DateTime @default(now())
+  message   String           @db.Text
+  type      NotificationType @default(INFO)
+  userId    String?          // Can be targeted to a specific user or be system-wide
+  user      User?            @relation(fields: [userId], references: [id])
+  createdAt DateTime         @default(now())
+  readAt    DateTime?
 }
 
 model Patient {

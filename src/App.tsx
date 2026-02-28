@@ -20,6 +20,7 @@ import Signup from './pages/Signup';
 import OnboardingWizard from './components/OnboardingWizard';
 import KnowledgeBase from './components/KnowledgeBase';
 import SystemNotifications from './components/SystemNotifications';
+import PubMedRAG from './components/PubMedRAG';
 
 function AppContent() {
   const { user, loading, logout, refresh } = useAuth();
@@ -42,12 +43,6 @@ function AppContent() {
     setShowOnboarding(false);
   };
 
-  const [pubmedQuery, setPubmedQuery] = useState('');
-  const [pubmedResult, setPubmedResult] = useState<any>(null);
-  const [isSearchingPubmed, setIsSearchingPubmed] = useState(false);
-
-
-  
   // Scribe State
   const [isRecording, setIsRecording] = useState(false);
   const [scribeResult, setScribeResult] = useState<any>(null);
@@ -81,26 +76,6 @@ function AppContent() {
     window.addEventListener('online', handleOnline);
     return () => window.removeEventListener('online', handleOnline);
   }, []);
-
-  const handlePubmedSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pubmedQuery.trim()) return;
-    
-    setIsSearchingPubmed(true);
-    try {
-      const response = await fetch('/api/pubmed', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: pubmedQuery })
-      });
-      const data = await response.json();
-      setPubmedResult(data);
-    } catch (error) {
-      console.error('PubMed search error:', error);
-    } finally {
-      setIsSearchingPubmed(false);
-    }
-  };
 
   const startScribe = async () => {
     setIsRecording(true);
@@ -275,7 +250,7 @@ function AppContent() {
               {activeTab === 'dashboard' && 'Clinical Decision Support'}
               {activeTab === 'radar' && 'Epidemiological Outbreak Radar'}
               {activeTab === 'chat' && 'AI Orchestrator'}
-              {activeTab === 'pubmed' && 'Medical Literature RAG'}
+              {activeTab === 'pubmed' && 'PubMed RAG Orchestrator'}
               {activeTab === 'patients' && 'Patient Records'}
               {activeTab === 'knowledge' && 'Medical Knowledge Base'}
               {activeTab === 'notifications' && 'System Notifications'}
@@ -463,59 +438,8 @@ function AppContent() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="max-w-4xl mx-auto"
             >
-              <div className="bg-white rounded-3xl p-8 border border-[#141414]/5 shadow-sm mb-8">
-                <h3 className="text-xl font-bold mb-6">Evidence-Based Literature Search</h3>
-                <form onSubmit={handlePubmedSearch} className="flex gap-4">
-                  <input 
-                    type="text" 
-                    value={pubmedQuery}
-                    onChange={(e) => setPubmedQuery(e.target.value)}
-                    placeholder="Enter a clinical question (e.g., 'Efficacy of SGLT2 inhibitors in heart failure')"
-                    className="flex-1 px-6 py-4 bg-gray-50 border border-[#141414]/10 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                  />
-                  <button 
-                    type="submit"
-                    disabled={isSearchingPubmed}
-                    className="px-8 py-4 bg-[#141414] text-white rounded-2xl font-bold text-sm hover:bg-gray-800 transition-colors disabled:opacity-50"
-                  >
-                    {isSearchingPubmed ? 'Searching...' : 'Ask PubMed'}
-                  </button>
-                </form>
-              </div>
-
-              {pubmedResult && (
-                <motion.div 
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="space-y-6"
-                >
-                  <div className="bg-emerald-50 rounded-3xl p-8 border border-emerald-100">
-                    <h4 className="font-bold text-emerald-900 mb-4 flex items-center gap-2">
-                      <BookOpen size={18} /> Synthesis of Evidence
-                    </h4>
-                    <p className="text-emerald-800 leading-relaxed">
-                      {pubmedResult.answer}
-                    </p>
-                  </div>
-
-                  <div className="bg-white rounded-3xl p-8 border border-[#141414]/5 shadow-sm">
-                    <h4 className="font-bold mb-6">Supporting Citations</h4>
-                    <div className="space-y-4">
-                      {pubmedResult.citations.map((cite: any, i: number) => (
-                        <div key={i} className="p-4 rounded-2xl bg-gray-50 border border-[#141414]/5">
-                          <p className="text-xs font-bold text-emerald-600 mb-1">{cite.id}</p>
-                          <p className="text-sm font-bold mb-1">{cite.title}</p>
-                          <p className="text-[10px] text-[#141414]/40 uppercase tracking-wider">
-                            {cite.journal} • {cite.year}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+              <PubMedRAG />
             </motion.div>
           )}
 
