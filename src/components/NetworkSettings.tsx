@@ -1,8 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Save, Loader2, CheckCircle2, AlertCircle, Server } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useAuth } from '../hooks/useAuth';
 
 export default function NetworkSettings() {
+  const { user } = useAuth();
+
+  if (user?.role !== 'ADMIN') {
+    return <div className="p-8"><p className="text-red-500">Access Denied. Admin privileges required.</p></div>;
+  }
   const [config, setConfig] = useState({
     baseUrl: '',
     aiMode: 'CLOUD',

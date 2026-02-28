@@ -1,60 +1,52 @@
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import { PrismaClient, Role } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Starting the seeding process...');
+  console.log('🌱 Starting database seeding...');
 
-  const adminEmail = process.env.DEFAULT_ADMIN_EMAIL;
-  const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD;
+  // 1. Create Default Admin
+  const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@hakim.raidan.pro';
+  const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin123';
+  const hashedPassword = await bcrypt.hash(adminPassword, 10);
 
-  if (!adminEmail || !adminPassword) {
-    throw new Error('DEFAULT_ADMIN_EMAIL and DEFAULT_ADMIN_PASSWORD must be set in your .env file');
-  }
-
-  // Check if the admin user already exists
-  const existingAdmin = await prisma.user.findUnique({
+  const admin = await prisma.user.upsert({
     where: { email: adminEmail },
+    update: {},
+    create: {
+      email: adminEmail,
+      name: 'Super Admin',
+      password: hashedPassword,
+      role: Role.ADMIN,
+      isVerified: true,
+    },
   });
 
-  if (existingAdmin) {
-    console.log('Super Admin user already exists. Skipping creation.');
-  } else {
-    console.log('Creating Super Admin user...');
-    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+  console.log(`✅ Admin user created: ${admin.email}`);
 
-    await prisma.user.create({
-      data: {
-        email: adminEmail,
-        password: hashedPassword,
-        name: 'Super Admin',
-        role: 'ADMIN',
-        emailVerified: new Date(),
-      },
-    });
-    console.log('Super Admin user created successfully.');
-  }
+  // 2. Create Default System Config
+  const config = await prisma.systemConfig.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: {
+      id: 'default',
+      baseUrl: 'https://hakim.raidan.pro',
+      aiMode: 'HYBRID',
+      activeCloud: 'GEMINI',
+      ollamaUrl: 'http://127.0.0.1:11434',
+      publicTrialEnabled: false,
+    },
+  });
 
-  // You can add other seed data here, e.g., initial SystemConfig
-  const existingConfig = await prisma.systemConfig.findFirst();
-  if (!existingConfig) {
-    console.log('Creating initial system configuration...');
-    await prisma.systemConfig.create({
-      data: {
-        // Initial default settings can be placed here
-        publicTrialEnabled: false,
-        trialMessageLimit: 10,
-      }
-    });
-    console.log('Initial system configuration created.');
-  }
+  console.log('✅ Default system configuration initialized.');
 
+  console.log('🏁 Seeding complete.');
 }
 
 main()
   .catch((e) => {
-    console.error(e);
+    console.error('❌ Seeding failed:', e);
     process.exit(1);
   })
   .finally(async () => {

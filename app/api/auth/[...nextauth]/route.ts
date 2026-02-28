@@ -1,4 +1,4 @@
-import NextAuth from 'next-auth';
+import NextAuth, { NextAuthOptions } from 'next-auth';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import { PrismaClient } from '@prisma/client';
 import CredentialsProvider from 'next-auth/providers/credentials';
@@ -8,8 +8,8 @@ import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
-export const authOptions = {
-  adapter: PrismaAdapter(prisma),
+export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma) as any,
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -35,7 +35,7 @@ export const authOptions = {
         });
 
         if (user && user.password && await bcrypt.compare(credentials.password, user.password)) {
-          return { id: user.id, name: user.name, email: user.email, role: user.role };
+          return { id: user.id, name: user.name, email: user.email, role: user.role } as any;
         }
         return null;
       },
@@ -45,17 +45,17 @@ export const authOptions = {
     strategy: 'jwt',
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: any) {
       if (user) {
         token.role = user.role;
         token.id = user.id;
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: any) {
       if (session.user) {
-        session.user.role = token.role;
-        session.user.id = token.id;
+        (session.user as any).role = token.role;
+        (session.user as any).id = token.id;
       }
       return session;
     },

@@ -2,8 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Cpu, Zap, Save, Loader2, CheckCircle2, AlertCircle, Terminal, Key, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import VoiceSettings from './VoiceSettings';
+import { useAuth } from '../hooks/useAuth';
 
 export default function AdvancedSettings() {
+  const { user } = useAuth();
+
+  if (user?.role !== 'ADMIN') {
+    return <div className="p-8"><p className="text-red-500">Access Denied. Admin privileges required.</p></div>;
+  }
   const [config, setConfig] = useState({
     remoteGpuUrl: '',
     n8nWebhookUrl: '',

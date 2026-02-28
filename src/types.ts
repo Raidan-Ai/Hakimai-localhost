@@ -38,3 +38,17 @@ export interface AuditLog {
   resource: string;
   timestamp: string;
 }
+
+export enum Priority {
+  LOW = 'Low',
+  MEDIUM = 'Medium',
+  HIGH = 'High',
+}
+
+export interface Task {
+  id: string;
+  text: string;
+  completed: boolean;
+  dueDate?: Date;
+  priority: Priority;
+}

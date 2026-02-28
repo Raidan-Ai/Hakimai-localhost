@@ -257,7 +257,7 @@ export default function ChatPage() {
       </div>
 
       {/* Input Area */}
-      <div className="p-6 bg-gray-50/50 border-t border-[#141414]/5">
+      <div className="p-6 bg-gray-50/50 border-t border-[#141414]/5 chat-input">
         {/* File Previews */}
         <AnimatePresence>
           {files.length > 0 && (
@@ -291,7 +291,7 @@ export default function ChatPage() {
 
         <form onSubmit={handleSubmit} className="relative">
           <div {...getRootProps()} className={cn(
-            "absolute left-4 top-1/2 -translate-y-1/2 cursor-pointer p-2 rounded-full transition-colors",
+            "absolute left-4 top-1/2 -translate-y-1/2 cursor-pointer p-2 rounded-full transition-colors upload-button",
             isDragActive ? "bg-emerald-100 text-emerald-600" : "hover:bg-gray-200 text-[#141414]/40"
           )}>
             <input {...getInputProps()} />
@@ -310,7 +310,7 @@ export default function ChatPage() {
             <button
                 onClick={() => alert('Start recording...')}
                 className={cn(
-                    "p-2 rounded-full transition-colors",
+                    "p-2 rounded-full transition-colors drive-button",
                     isRecording ? "bg-red-500/20 text-red-600 animate-pulse" : "hover:bg-gray-200 text-[#141414]/40"
                 )}
             >

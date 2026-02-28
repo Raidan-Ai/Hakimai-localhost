@@ -97,6 +97,7 @@ model User {
   image         String?
   password      String?
   role          Role      @default(DOCTOR)
+  isVerified    Boolean   @default(false)
   accounts      Account[]
   sessions      Session[]
 
@@ -113,8 +114,42 @@ model User {
   updatedAt     DateTime  @updatedAt
   apiKeys       ApiKey[]
   googleDriveTokens UserGoogleDriveToken[]
+  doctorProfile   DoctorProfile? // Relation to the new DoctorProfile model
 
   @@index([clinicId])
+}
+
+// New model for detailed doctor information
+model DoctorProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  workplaceType   String?  // e.g., "Clinic", "Hospital"
+  specialization  String?
+  medicalDegrees  Json?    // Store as a JSON array, e.g., ["MD", "MBBS"]
+  voicePrintUrl   String?  // Path to the saved audio file for speaker recognition
+  updatedAt       DateTime @updatedAt
+}
+
+// New model for the local RAG knowledge base
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  fileName  String
+  fileType  String   // e.g., "pdf", "txt"
+  content   String   @db.Text
+  vectorized Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// New model for admin-to-doctor notifications
+model SystemNotification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String   @db.Text
+  isRead    Boolean  @default(false)
+  userId    String   // Can be targeted to a specific user or be system-wide
+  createdAt DateTime @default(now())
 }
 
 model Patient {
@@ -126,7 +161,16 @@ model Patient {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
+  // Self-relation for family tracking
+  phoneNumber             String?  @unique
+  physicalAddress         String?
+  familyId                String?  // An ID to group family members
+  family                  Patient? @relation("Family", fields: [familyId], references: [id])
+  members                 Patient[] @relation("Family")
+
   @@index([name])
+  @@index([phoneNumber])
+  @@index([familyId])
 }
 
 model Case {
@@ -172,6 +216,8 @@ model UserGoogleDriveToken {
   accessToken String
   refreshToken String
   expiryDate  DateTime
+  scope       String?
+  tokenType   String?
   user        User     @relation(fields: [userId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

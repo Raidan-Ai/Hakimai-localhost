@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Cpu, Download, Loader2, CheckCircle2, AlertCircle, Trash2, Box } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '../hooks/useAuth';
 
 interface Model {
   name: string;
@@ -9,6 +10,11 @@ interface Model {
 }
 
 export default function ModelManager() {
+  const { user } = useAuth();
+
+  if (user?.role !== 'ADMIN') {
+    return <div className="p-8"><p className="text-red-500">Access Denied. Admin privileges required.</p></div>;
+  }
   const [models, setModels] = useState<Model[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pullingModel, setPullingModel] = useState('');

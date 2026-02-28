@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, HeartPulse, Stethoscope, Syringe, Shield, Users, FileText, Lock, Search, Menu, Bell, MessageSquare, BookOpen, Search as SearchIcon, Radio, Mic, ScanLine, AlertCircle, Settings, Globe, Box, Zap } from 'lucide-react';
+import { Activity, HeartPulse, Stethoscope, Syringe, Shield, Users, FileText, Lock, Search, Menu, Bell, MessageSquare, BookOpen, Search as SearchIcon, Radio, Mic, ScanLine, AlertCircle, Settings, Globe, Box, Zap, LogOut, Book } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ChatPage from './components/ChatPage';
 import OutbreakRadar from './components/OutbreakRadar';
@@ -11,17 +11,42 @@ import NetworkSettings from './components/NetworkSettings';
 import ModelManager from './components/ModelManager';
 import AdvancedSettings from './components/AdvancedSettings';
 import UserManagement from './components/UserManagement';
+import TaskManager from './components/TaskManager';
+import Tour from './components/Tour';
 import { syncOfflineData } from './lib/offlineSync';
+import { AuthProvider, useAuth } from './hooks/useAuth';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import OnboardingWizard from './components/OnboardingWizard';
+import KnowledgeBase from './components/KnowledgeBase';
+import SystemNotifications from './components/SystemNotifications';
 
-export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+function AppContent() {
+  const { user, loading, logout, refresh } = useAuth();
+  const [authView, setAuthView] = useState<'login' | 'signup'>('login');
+  const [activeTab, setActiveTab] = useState('chat');
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setActiveTab(user.role === 'ADMIN' ? 'dashboard' : 'chat');
+      // If doctor has no profile, show onboarding
+      if (user.role === 'DOCTOR' && !user.isVerified) {
+        setShowOnboarding(true);
+      }
+    }
+  }, [user]);
+
+  const handleOnboardingComplete = async () => {
+    await refresh();
+    setShowOnboarding(false);
+  };
+
   const [pubmedQuery, setPubmedQuery] = useState('');
   const [pubmedResult, setPubmedResult] = useState<any>(null);
   const [isSearchingPubmed, setIsSearchingPubmed] = useState(false);
 
-  // --- Mock User ---
-  // In a real app, this would come from an auth context like NextAuth.js
-  const [currentUser, setCurrentUser] = useState({ role: 'ADMIN' });
+
   
   // Scribe State
   const [isRecording, setIsRecording] = useState(false);
@@ -30,6 +55,22 @@ export default function App() {
   // Digitization State
   const [isDigitizing, setIsDigitizing] = useState(false);
   const [digitizeResult, setDigitizeResult] = useState<any>(null);
+  const [runTour, setRunTour] = useState(false);
+
+  useEffect(() => {
+    const tourCompleted = localStorage.getItem('tourCompleted');
+    if (!tourCompleted) {
+      setRunTour(true);
+    }
+  }, []);
+
+  const handleTourCallback = (data: any) => {
+    const { status } = data;
+    if (['finished', 'skipped'].includes(status)) {
+      setRunTour(false);
+      localStorage.setItem('tourCompleted', 'true');
+    }
+  };
 
   useEffect(() => {
     // Attempt to sync offline data on mount
@@ -93,9 +134,26 @@ export default function App() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F0] flex items-center justify-center">
+        <Loader2 className="animate-spin text-emerald-500 w-12 h-12" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return authView === 'login' ? (
+      <Login onSignup={() => setAuthView('signup')} />
+    ) : (
+      <Signup onLogin={() => setAuthView('login')} />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F5F5F0] font-sans text-[#141414]">
       <PrivacyLock />
+      <Tour run={runTour} callback={handleTourCallback} />
       {/* Sidebar Navigation */}
       <nav className="fixed left-0 top-0 h-full w-64 bg-[#141414] text-white p-6 flex flex-col">
         <div className="flex items-center gap-3 mb-12">
@@ -105,7 +163,7 @@ export default function App() {
           <h1 className="text-xl font-bold tracking-tight">HAKIM AI</h1>
         </div>
 
-        <div className="space-y-2 flex-1">
+        <div className="space-y-2 flex-1 sidebar">
           <NavItem 
             icon={<Activity size={20} />} 
             label="Clinical Dashboard" 
@@ -136,7 +194,19 @@ export default function App() {
             active={activeTab === 'patients'} 
             onClick={() => setActiveTab('patients')} 
           />
-          {currentUser.role === 'ADMIN' && (
+          <NavItem 
+            icon={<Book size={20} />} 
+            label="Knowledge Base" 
+            active={activeTab === 'knowledge'} 
+            onClick={() => setActiveTab('knowledge')} 
+          />
+          <NavItem 
+            icon={<Bell size={20} />} 
+            label="Notifications" 
+            active={activeTab === 'notifications'} 
+            onClick={() => setActiveTab('notifications')} 
+          />
+          {user.role === 'ADMIN' && (
             <>
               <NavItem 
                 icon={<Settings size={20} />} 
@@ -168,20 +238,32 @@ export default function App() {
                 active={activeTab === 'users'} 
                 onClick={() => setActiveTab('users')} 
               />
+              <NavItem 
+                icon={<FileText size={20} />} 
+                label="Task Manager" 
+                active={activeTab === 'tasks'} 
+                onClick={() => setActiveTab('tasks')} 
+              />
             </>
           )}
         </div>
 
-        <div className="pt-6 border-t border-white/10">
+        <div className="pt-6 border-t border-white/10 space-y-4">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5">
-            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xs">
-              DR
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold text-xs uppercase">
+              {user.name.substring(0, 2)}
             </div>
-            <div>
-              <p className="text-sm font-medium">Dr. Aris</p>
-              <p className="text-[10px] text-white/40 uppercase tracking-wider">Cardiology</p>
+            <div className="flex-1 overflow-hidden">
+              <p className="text-sm font-medium truncate">{user.name}</p>
+              <p className="text-[10px] text-white/40 uppercase tracking-wider truncate">{user.role}</p>
             </div>
           </div>
+          <button 
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-4 py-2 text-white/40 hover:text-red-400 transition-colors text-xs font-bold uppercase tracking-widest"
+          >
+            <LogOut size={14} /> Log Out
+          </button>
         </div>
       </nav>
 
@@ -195,11 +277,14 @@ export default function App() {
               {activeTab === 'chat' && 'AI Orchestrator'}
               {activeTab === 'pubmed' && 'Medical Literature RAG'}
               {activeTab === 'patients' && 'Patient Records'}
+              {activeTab === 'knowledge' && 'Medical Knowledge Base'}
+              {activeTab === 'notifications' && 'System Notifications'}
               {activeTab === 'settings' && 'AI Provider Settings'}
               {activeTab === 'network' && 'Runtime Network Configuration'}
               {activeTab === 'models' && 'Local AI Model Manager'}
               {activeTab === 'advanced' && 'Advanced Configuration'}
               {activeTab === 'users' && 'User Management'}
+              {activeTab === 'tasks' && 'Task Manager'}
               {activeTab === 'legal-disclaimer' && 'Legal Disclaimer'}
               {activeTab === 'legal-privacy' && 'Privacy Policy'}
               {activeTab === 'legal-terms' && 'Terms of Service'}
@@ -434,7 +519,29 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'settings' && (
+          {activeTab === 'knowledge' && (
+            <motion.div 
+              key="knowledge"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <KnowledgeBase />
+            </motion.div>
+          )}
+
+          {activeTab === 'notifications' && (
+            <motion.div 
+              key="notifications"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <SystemNotifications />
+            </motion.div>
+          )}
+
+          {activeTab === 'settings' && user.role === 'ADMIN' && (
             <motion.div 
               key="settings"
               initial={{ opacity: 0, y: 20 }}
@@ -478,7 +585,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'network' && (
+          {activeTab === 'network' && user.role === 'ADMIN' && (
             <motion.div 
               key="network"
               initial={{ opacity: 0, y: 20 }}
@@ -489,7 +596,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'models' && (
+          {activeTab === 'models' && user.role === 'ADMIN' && (
             <motion.div 
               key="models"
               initial={{ opacity: 0, y: 20 }}
@@ -500,7 +607,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'advanced' && (
+          {activeTab === 'advanced' && user.role === 'ADMIN' && (
             <motion.div 
               key="advanced"
               initial={{ opacity: 0, y: 20 }}
@@ -511,7 +618,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {activeTab === 'users' && (
+          {activeTab === 'users' && user.role === 'ADMIN' && (
             <motion.div
               key="users"
               initial={{ opacity: 0, y: 20 }}
@@ -521,10 +628,25 @@ export default function App() {
               <UserManagement />
             </motion.div>
           )}
+
+          {activeTab === 'tasks' && user.role === 'ADMIN' && (
+            <motion.div
+              key="tasks"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <TaskManager />
+            </motion.div>
+          )}
         </AnimatePresence>
 
         <Footer onNavigate={setActiveTab} />
       </main>
+
+      {showOnboarding && (
+        <OnboardingWizard onComplete={handleOnboardingComplete} />
+      )}
     </div>
   );
 }
@@ -616,5 +738,13 @@ function ComplianceItem({ label, status }: { label: string, status: string }) {
         <span className="text-xs font-medium text-emerald-400">{status}</span>
       </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

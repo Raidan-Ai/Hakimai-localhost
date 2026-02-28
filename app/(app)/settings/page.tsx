@@ -80,6 +80,14 @@ export default function DoctorSettingsPage() {
             </div>
           </div>
         </div>
+
+        <div className="pt-6 border-t border-[#141414]/5">
+            <label className="block text-xs font-bold uppercase tracking-widest text-[#141414]/40 mb-2">Integrations</label>
+            <a href="/api/auth/gdrive/connect" className="w-full max-w-xs px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22a10 10 0 0 0 10-10h-2a8 8 0 0 1-8 8v2z"/><path d="M2 12a10 10 0 0 1 10-10v2a8 8 0 0 0-8 8H2z"/><path d="m16.5 10.5-4-4-4 4"/><path d="m12.5 6.5 v8"/></svg>
+              Connect Google Drive
+            </a>
+        </div>
       </div>
 
       <div className="mt-8 pt-8 border-t border-[#141414]/5 flex justify-end">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Settings, Server, Cpu, CheckCircle2, AlertCircle, Loader2, Globe, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '../hooks/useAuth';
 
 const PROVIDERS = [
   { name: 'Ollama', defaultUrl: 'http://127.0.0.1:11434', defaultModel: 'llava-med:latest' },
@@ -10,6 +11,11 @@ const PROVIDERS = [
 ];
 
 export default function AISettings() {
+  const { user } = useAuth();
+
+  if (user?.role !== 'ADMIN') {
+    return <div className="p-8"><p className="text-red-500">Access Denied. Admin privileges required.</p></div>;
+  }
   const [provider, setProvider] = useState(PROVIDERS[0].name);
   const [url, setUrl] = useState(PROVIDERS[0].defaultUrl);
   const [model, setModel] = useState(PROVIDERS[0].defaultModel);

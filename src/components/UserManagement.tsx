@@ -5,6 +5,13 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const handleVerify = async (userId: string) => {
+    const response = await fetch(`/api/admin/users/${userId}/verify`, { method: 'POST' });
+    if (response.ok) {
+      setUsers(users.map(u => u.id === userId ? { ...u, isVerified: true } : u));
+    }
+  };
+
   useEffect(() => {
     fetch('/api/admin/users')
       .then(res => res.json())
@@ -43,6 +50,7 @@ export default function UserManagement() {
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created At</th>
                 <th scope="col" className="relative px-6 py-3">
                   <span className="sr-only">Actions</span>
@@ -59,8 +67,16 @@ export default function UserManagement() {
                       {user.role}
                     </span>
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {user.isVerified ? 
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Verified</span> : 
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">Pending</span>}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(user.createdAt).toLocaleDateString()}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    {!user.isVerified && user.role === 'DOCTOR' && (
+                      <button onClick={() => handleVerify(user.id)} className="text-indigo-600 hover:text-indigo-900 mr-4">Verify</button>
+                    )}
                     <button className="text-indigo-600 hover:text-indigo-900 mr-4"><Edit size={16}/></button>
                     <button className="text-red-600 hover:text-red-900"><Trash2 size={16}/></button>
                   </td>

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import cookieParser from 'cookie-parser';
@@ -6,6 +6,12 @@ import path from 'path';
 
 import { randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
+import session from 'express-session';
+import { google } from 'googleapis';
+
+import { signToken, verifyToken, hashPassword, comparePassword } from './src/lib/auth';
+import { AIModelFactory } from './src/lib/ai/factory';
+import { AIModelProvider } from './src/lib/ai/types';
 
 const prisma = new PrismaClient();
 
@@ -21,6 +27,13 @@ async function startServer() {
   app.use(express.json());
   app.use(cookieParser());
 
+  app.use(session({
+    secret: process.env.NEXTAUTH_SECRET || 'super-secret-key',
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: process.env.NODE_ENV === 'production' }
+  }));
+
   // Mock Subdomain Middleware for Express (since we are in a non-Next.js environment)
   // This mimics the behavior requested for the Next.js middleware
   app.use((req, res, next) => {
@@ -32,6 +45,83 @@ async function startServer() {
     (req as any).isAppSubdomain = hostname.startsWith('app.');
     
     next();
+  });
+
+  // Authentication Middleware
+  const authenticate = async (req: any, res: any, next: any) => {
+    const token = req.cookies.auth_token;
+    if (!token) return res.status(401).json({ error: 'Unauthorized: No token provided' });
+
+    const decoded = verifyToken(token);
+    if (!decoded) return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
+
+    const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+    if (!user) return res.status(401).json({ error: 'Unauthorized: User not found' });
+
+    req.user = user;
+    next();
+  };
+
+  const authorize = (roles: Role[]) => {
+    return (req: any, res: any, next: any) => {
+      if (!req.user || !roles.includes(req.user.role)) {
+        return res.status(403).json({ error: 'Forbidden: Access denied' });
+      }
+      next();
+    };
+  };
+
+  // Auth Routes
+  app.post('/api/auth/signup', async (req, res) => {
+    const { email, password, name, role } = req.body;
+    try {
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) return res.status(400).json({ error: 'User already exists' });
+
+      const hashedPassword = await hashPassword(password);
+      const user = await prisma.user.create({
+        data: {
+          email,
+          password: hashedPassword,
+          name,
+          role: role || Role.DOCTOR,
+          isVerified: role === Role.ADMIN, // Admins auto-verified for demo
+        },
+      });
+
+      const token = signToken({ userId: user.id, email: user.email!, role: user.role });
+      res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+      res.status(201).json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    } catch (error) {
+      res.status(500).json({ error: 'Signup failed' });
+    }
+  });
+
+  app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    try {
+      const user = await prisma.user.findUnique({ where: { email } });
+      if (!user || !user.password) return res.status(401).json({ error: 'Invalid credentials' });
+
+      const isValid = await comparePassword(password, user.password);
+      if (!isValid) return res.status(401).json({ error: 'Invalid credentials' });
+
+      const token = signToken({ userId: user.id, email: user.email!, role: user.role });
+      res.cookie('auth_token', token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' });
+      res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    } catch (error) {
+      res.status(500).json({ error: 'Login failed' });
+    }
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    res.clearCookie('auth_token');
+    res.json({ success: true });
+  });
+
+  app.get('/api/auth/me', authenticate, (req: any, res) => {
+    const { id, email, name, role, isVerified } = req.user;
+    res.json({ user: { id, email, name, role, isVerified } });
   });
 
   // API Routes
@@ -142,7 +232,7 @@ async function startServer() {
    * 6. Connection Ping Utility
    * Safely attempts a health-check to a local AI endpoint.
    */
-  app.post('/api/admin/ping-ai', async (req, res) => {
+  app.post('/api/admin/ping-ai', authenticate, authorize([Role.ADMIN]), async (req, res) => {
     const { url, provider } = req.body;
 
     if (!url) return res.status(400).json({ error: 'URL is required' });
@@ -189,6 +279,33 @@ async function startServer() {
   app.post('/api/chat', upload.single('file'), async (req, res) => {
     const { prompt } = req.body;
     const file = req.file;
+    const user = (req as any).user; // This would be populated by a real auth middleware
+
+    if (!user) {
+      const config = await prisma.systemConfig.findUnique({ where: { id: 'default' } });
+      if (config?.publicTrialEnabled) {
+        let trialUserId = (req.session as any).trialUserId;
+        let trialUser;
+
+        if (trialUserId) {
+          trialUser = await prisma.trialUser.findUnique({ where: { id: trialUserId } });
+        }
+
+        if (!trialUser) {
+          trialUser = await prisma.trialUser.create({ data: {} });
+          (req.session as any).trialUserId = trialUser.id;
+        }
+
+        if (trialUser.messageCount >= (config.trialMessageLimit || 10)) {
+          return res.json({ type: 'TRIAL_ENDED' });
+        }
+
+        await prisma.trialUser.update({
+          where: { id: trialUser.id },
+          data: { messageCount: { increment: 1 } },
+        });
+      }
+    }
 
     // PHI Detection Logic (Simplified for demo)
     const phiPatterns = [
@@ -264,7 +381,7 @@ async function startServer() {
   /**
    * 8. Admin Runtime Configuration
    */
-  app.get('/api/admin/config', async (req, res) => {
+  app.get('/api/admin/config', authenticate, authorize([Role.ADMIN]), async (req, res) => {
     try {
       let config = await prisma.systemConfig.findUnique({ where: { id: 'default' } });
       if (!config) {
@@ -278,7 +395,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/admin/config', async (req, res) => {
+  app.post('/api/admin/config', authenticate, authorize([Role.ADMIN]), async (req, res) => {
     try {
       const config = await prisma.systemConfig.upsert({
         where: { id: 'default' },
@@ -294,7 +411,7 @@ async function startServer() {
   /**
    * 9. Local AI Model Manager (Ollama Proxy)
    */
-  app.get('/api/admin/models', async (req, res) => {
+  app.get('/api/admin/models', authenticate, authorize([Role.ADMIN]), async (req, res) => {
     try {
       const config = await prisma.systemConfig.findUnique({ where: { id: 'default' } });
       const ollamaUrl = config?.ollamaUrl || 'http://127.0.0.1:11434';
@@ -307,7 +424,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/admin/pull-model', async (req, res) => {
+  app.post('/api/admin/pull-model', authenticate, authorize([Role.ADMIN]), async (req, res) => {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: 'Model name is required' });
 
@@ -348,16 +465,16 @@ async function startServer() {
   /**
    * 10. API Key Management
    */
-  app.get('/api/admin/keys', async (req, res) => {
+  app.get('/api/admin/keys', authenticate, authorize([Role.ADMIN]), async (req, res) => {
     // In a real app, you'd get the admin user ID from the session
-    const adminUserId = 'clx...'; // Placeholder
+    const adminUserId = (req as any).user.id;
     const keys = await prisma.apiKey.findMany({ where: { userId: adminUserId } });
     res.json(keys);
   });
 
-  app.post('/api/admin/keys', async (req, res) => {
+  app.post('/api/admin/keys', authenticate, authorize([Role.ADMIN]), async (req, res) => {
     const { name } = req.body;
-    const adminUserId = 'clx...'; // Placeholder
+    const adminUserId = (req as any).user.id;
     const key = `hakim_${randomBytes(16).toString('hex')}`;
 
     const newKey = await prisma.apiKey.create({
@@ -396,20 +513,24 @@ async function startServer() {
    */
   const adminApi = express.Router();
   
-  // Middleware to check for ADMIN role
-  adminApi.use(async (req, res, next) => {
-    // In a real app, you'd get the user from a session and check their role
-    const is_admin = true; // Placeholder for session check
-    if (is_admin) {
-      next();
-    } else {
-      res.status(403).json({ error: 'Forbidden: Access denied' });
-    }
-  });
+  adminApi.use(authenticate, authorize([Role.ADMIN]));
 
   adminApi.get('/users', async (req, res) => {
     const users = await prisma.user.findMany();
     res.json(users.map(u => ({ ...u, password: '' }))); // Exclude password hash
+  });
+
+  adminApi.post('/users/:id/verify', async (req, res) => {
+    const { id } = req.params;
+    try {
+      const user = await prisma.user.update({
+        where: { id },
+        data: { isVerified: true },
+      });
+      res.json(user);
+    } catch (error) {
+      res.status(404).json({ error: 'User not found' });
+    }
   });
 
   adminApi.post('/users', async (req, res) => {
@@ -423,10 +544,144 @@ async function startServer() {
 
   app.use('/api/admin', adminApi);
 
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_DRIVE_CLIENT_ID,
+    process.env.GOOGLE_DRIVE_CLIENT_SECRET,
+    `${process.env.NEXTAUTH_URL}/api/auth/gdrive/callback`
+  );
+  
+  app.get('/api/auth/gdrive/connect', (req, res) => {
+    const scopes = [
+      'https://www.googleapis.com/auth/drive.readonly',
+      'https://www.googleapis.com/auth/userinfo.email',
+    ];
+  
+    const url = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'consent',
+      scope: scopes,
+    });
+  
+    res.redirect(url);
+  });
+  
+  app.get('/api/auth/gdrive/callback', async (req, res) => {
+    const { code } = req.query;
+    try {
+      const { tokens } = await oauth2Client.getToken(code as string);
+      oauth2Client.setCredentials(tokens);
+  
+      // In a real app, you would get the user ID from the session
+      const userId = 'clx...'; // Placeholder
+      
+      // Encrypt and store the tokens securely
+      // For this example, we'll store them directly, but in production, you'd use a library like `crypto`
+      await prisma.userGoogleDriveToken.upsert({
+          where: { userId: userId },
+          update: {
+              accessToken: tokens.access_token!,
+              refreshToken: tokens.refresh_token!,
+              scope: tokens.scope!,
+              tokenType: tokens.token_type!,
+              expiryDate: new Date(tokens.expiry_date!),
+          },
+          create: {
+              userId: userId,
+              accessToken: tokens.access_token!,
+              refreshToken: tokens.refresh_token!,
+              scope: tokens.scope!,
+              tokenType: tokens.token_type!,
+              expiryDate: new Date(tokens.expiry_date!),
+          }
+      });
+  
+      res.redirect('/settings'); // Redirect to settings page after successful connection
+    } catch (error) {
+      console.error('Error getting Google Drive token:', error);
+      res.status(500).send('Failed to connect Google Drive');
+    }
+  });
+
   /**
    * 13. Google Drive OAuth Flow (for Doctors)
    */
+  app.get('/api/gdrive/files', async (req, res) => {
+    try {
+      // In a real app, you would get the user ID from the session
+      const userId = 'clx...'; // Placeholder
+      const tokenData = await prisma.userGoogleDriveToken.findUnique({ where: { userId } });
+
+      if (!tokenData) {
+        return res.status(401).json({ error: 'Google Drive not connected' });
+      }
+
+      const oauth2Client = new google.auth.OAuth2();
+      oauth2Client.setCredentials({
+        access_token: tokenData.accessToken,
+        refresh_token: tokenData.refreshToken,
+      });
+
+      const drive = google.drive({ version: 'v3', auth: oauth2Client });
+      const response = await drive.files.list({
+        pageSize: 100,
+        fields: 'nextPageToken, files(id, name, mimeType)',
+        q: "(mimeType='application/pdf' or mimeType contains 'image/') and trashed = false",
+      });
+
+      res.json({ files: response.data.files });
+    } catch (error) {
+      console.error('Error fetching Google Drive files:', error);
+      res.status(500).json({ error: 'Failed to fetch files' });
+    }
+  });
+
   // ... (OAuth routes will be added here in a subsequent step)
+
+  /**
+   * 14. AI Case Analysis (HIPAA Compliant)
+   */
+  app.post('/api/cases/:id/ai/analyze', authenticate, async (req: any, res) => {
+    const { id } = req.params;
+    const { prompt, anonymize = true } = req.body;
+
+    try {
+      const caseData = await prisma.case.findUnique({
+        where: { id },
+        include: { patient: true },
+      });
+
+      if (!caseData) return res.status(404).json({ error: 'Case not found' });
+
+      // Determine provider from system config
+      const config = await prisma.systemConfig.findUnique({ where: { id: 'default' } });
+      const providerType = config?.aiMode === 'LOCAL_EDGE' ? AIModelProvider.OLLAMA : AIModelProvider.GEMINI;
+      
+      const aiProvider = AIModelFactory.getProvider(providerType, {
+        baseUrl: config?.ollamaUrl,
+        modelName: caseData.aiModelUsed || 'llava-med',
+      });
+
+      const analysis = await aiProvider.analyze({
+        prompt,
+        patientHistory: caseData.patient.encryptedMedicalHistory,
+        anonymize,
+      });
+
+      // Log the interaction for auditing
+      await prisma.auditLog.create({
+        data: {
+          userId: req.user.id,
+          action: 'AI_CASE_ANALYSIS',
+          resource: `Case:${id}`,
+        },
+      });
+
+      res.json(analysis);
+    } catch (error: any) {
+      console.error('[AI_ANALYSIS] Error:', error.message);
+      res.status(500).json({ error: 'AI analysis failed' });
+    }
+  });
 
   // Vite Integration
   if (process.env.NODE_ENV !== 'production') {
